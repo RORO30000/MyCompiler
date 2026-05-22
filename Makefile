@@ -3,6 +3,7 @@
 CXX      = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra
 TARGET   = compilador
+# Apenas os arquivos .cpp reais que existem no seu projeto:
 SRCS     = main.cpp lexer.cpp parser.cpp
 OBJS     = $(SRCS:.cpp=.o)
 
@@ -16,7 +17,8 @@ $(TARGET): $(OBJS)
 	@echo ""
 
 # ── Compila cada .cpp a su .o ─────────────────
-%.o: %.cpp
+# Adicionamos semantic.hpp como dependência para que, se você mudá-lo, o make recompile o projeto.
+%.o: %.cpp semantic.hpp lexer.hpp errors.hpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # ── Ejecuta el compilador ─────────────────────
@@ -32,5 +34,4 @@ clean:
 	rm -f $(OBJS) $(TARGET)
 	@echo "Limpieza lista."
 
-# ── Evita conflictos con archivos del mismo nombre
 .PHONY: all run go clean
