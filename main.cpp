@@ -8,7 +8,7 @@
 
 using namespace std;
 
-// Declaradas en lexer.cpp y parser.cpp
+// Prototipos declarados en lexer.cpp y parser.cpp
 vector<Token> tokenizar(const string& fuente);
 double parsear(vector<Token>& tokens);
 
@@ -22,9 +22,9 @@ void compilarYEjecutar(const string& titulo, const string& codigo) {
     
     try {
         auto tokens = tokenizar(codigo);
-        // Ahora parsear() ejecuta las sentencias internamente (p.ej. imprime con mostrar)
+        // El parser procesa las declaraciones y despacha 'principal()' si existe
         parsear(tokens); 
-        cout << "\n✓ Ejecución finalizada sin errores críticos.\n";
+        cout << "\n✓ Fin de la sección de pruebas sin caídas críticas.\n";
     } catch (const exception& e) {
         cout << e.what();
     }
@@ -32,78 +32,136 @@ void compilarYEjecutar(const string& titulo, const string& codigo) {
 }
 
 int main() {
-    // 1. Prueba Estructurada Válida (Bucle mientras + Condicional si/sino)
-    // Nota: Adaptado estrictamente a las palabras clave de tu parser.cpp (fin_mientras, fin_si)
-    string programa_gramatical = 
-        "numero x = 1;\n"
-        "numero maximo = 4;\n"
-        "mientras (x < maximo)\n"
-        "    mostrar(x);\n"
-        "    x = x + 1;\n"
-        "fin_mientras\n"
-        "si (x == maximo)\n"
-        "    mostrar(999);\n"
-        "sino\n"
-        "    mostrar(111);\n"
-        "fin_si\n";
+    // ----------------------------------------------------------------------
+    // PROBANDO CARACTERÍSTICAS CORRECTAS / EXITOSAS
+    // ----------------------------------------------------------------------
 
-    compilarYEjecutar("Programa Estructurado Válido", programa_gramatical);
+    // 1. Programa Completo Estructurado con Llamadas a Funciones y Ámbitos
+    string prueba_funciones_exito = 
+        "funcion calcularSuma(numero a, numero b) retornar numero {\n"
+        "    retornar a + b;\n"
+        "}\n"
+        "\n"
+        "vacio principal() {\n"
+        "    numero x = 10;\n"
+        "    numero y = 20;\n"
+        "    numero resultado = calcularSuma(x, y);\n"
+        "    mostrar(resultado);\n"
+        "}\n";
+    compilarYEjecutar("1. Declaración y Llamada de Funciones (Éxito)", prueba_funciones_exito);
 
-    // 2. Prueba de Error Semántico: Variable no declarada
-    string error_semantico_1 = 
-        "y = 10;\n";
-    compilarYEjecutar("Error Semántico - Variable No Declarada", error_semantico_1);
+    // 2. Comprobando los nuevos tipos Booleanos, Caracteres y Condicionales Alfanuméricos
+    string prueba_tipos_nuevos = 
+        "vacio principal() {\n"
+        "    booleano bandera = verdadero;\n"
+        "    caracter opcion = 'A';\n"
+        "    si (bandera == verdadero)\n"
+        "        mostrar(\"El estado es verdadero de forma correcta\");\n"
+        "        mostrar(opcion);\n"
+        "    fin_si\n"
+        "}\n";
+    compilarYEjecutar("2. Uso de Booleanos y Caracteres (Éxito)", prueba_tipos_nuevos);
 
-    // 3. Prueba de Error Semántico: Redeclaración de variable
-    string error_semantico_2 = 
+    // 3. Ejecución Secuencial Clásica (Sin función principal)
+    string prueba_secuencial = 
         "numero a = 5;\n"
-        "numero a = 10;\n";
-    compilarYEjecutar("Error Semántico - Duplicado", error_semantico_2);
+        "numero b = 15;\n"
+        "mostrar(a * b);\n";
+    compilarYEjecutar("3. Modo de Ejecución Secuencial Estándar", prueba_secuencial);
 
-    // 4. Prueba de Advertencia: Variable no usada (Activará tu revisarNoUsadas())
-    string aviso_no_usada = 
-        "numero variableInutil = 42;\n"
-        "mostrar(10);\n";
-    compilarYEjecutar("Aviso - Variable Creada pero No Usada", aviso_no_usada);
 
-    // 5. Prueba de Error Sintáctico: Estructura de control mal cerrada
-    string error_sintactico = 
-        "si (1 == 1)\n"
-        "    mostrar(5);\n"
-        "/* Falta el fin_si reglamentario */\n";
-    compilarYEjecutar("Error Sintáctico - Estructura Abierta", error_sintactico);
-    
-    // 6. Prueba de Error Léxico: Caracteres no reconocidos o tokens mal formados
-    string error_lexico = 
-        "numero x = 5 @;\n"          // El caracter '@' no pertenece al lenguaje
-        "numero y = 3.14.15;\n"      // Un número con dos puntos decimales está mal formado
-        "numero $falsa_var = 10;\n"; // El símbolo '$' no es válido para identificadores
-    compilarYEjecutar("Error Léxico - Caracteres Inválidos", error_lexico);
+    // ----------------------------------------------------------------------
+    // PROBANDO ERRORES LÉXICOS (NUEVOS Y ANTIGUOS)
+    // ----------------------------------------------------------------------
 
-    // 7. Prueba de Error Léxico: Cadenas de texto (Strings) sin cerrar
-    string error_lexico_string =
-        "texto mensaje = \"Hola, esto es una prueba;\n" // Falta la comilla de cierre "
-        "mostrar(mensaje);\n";
-    compilarYEjecutar("Error Léxico - String Literal Abierto", error_lexico_string);
-    
-    // 8. Prueba de Error Léxico: Comentarios de bloque sin cerrar (EOF inesperado)
+    // 4. Error Léxico - Comentario en bloque abierto (EOF Inesperado)
     string error_lexico_comentario = 
-        "numero a = 5;\n"
-        "/* Inicia un comentario largo\n"
-        "   pero el programador olvidó cerrarlo...\n"
-        "numero b = 10;\n"; // El lexer se traga todo el código buscando el "*/" hasta el fin del archivo
-    compilarYEjecutar("Error Léxico - Comentario de Bloque Abierto", error_lexico_comentario);
+        "numero x = 10;\n"
+        "/* Esto es un comentario que inicia bien\n"
+        "   pero al programador se le olvidó poner el cierre de bloque\n"
+        "numero y = 20;\n";
+    compilarYEjecutar("4. Error Léxico - Comentario Abierto", error_lexico_comentario);
+
+    // 5. Error Léxico - Formatos Numéricos Letras O Símbolos Inválidos
+    string error_lexico_caracter = 
+        "vacio principal() {\n"
+        "    numero val = 45.12.3;\n" // Número mal formado
+        "    numero @invalido = 7;\n"  // Carácter '@' no pertenece al lenguaje
+        "}\n";
+    compilarYEjecutar("5. Error Léxico - Mal Formato Dinámico", error_lexico_caracter);
+
+
+    // ----------------------------------------------------------------------
+    // PROBANDO ERRORES SINTÁCTICOS
+    // ----------------------------------------------------------------------
+
+    // 6. Error Sintáctico - Parentización Desbalanceada en Expresiones
+    string error_sintactico_parentesis = 
+        "vacio principal() {\n"
+        "    numero calculo = (5 + 3 * 2;\n" // Falta cerrar )
+        "}\n";
+    compilarYEjecutar("6. Error Sintáctico - Paréntesis Faltante", error_sintactico_parentesis);
+
+    // 7. Error Sintáctico - Estructuras de Bloques o Llaves Mal Cerradas
+    string error_sintactico_llaves = 
+        "funcion prueba() retornar numero {\n"
+        "    retornar 1;\n"
+        "// Falta cerrar la llave de la función aquí \n";
+    compilarYEjecutar("7. Error Sintáctico - Llaves Abiertas de Subrutina", error_sintactico_llaves);
+
+
+    // ----------------------------------------------------------------------
+    // PROBANDO ERRORES SEMÁNTICOS (Aislamiento de Ámbitos y Firmas)
+    // ----------------------------------------------------------------------
+
+    // 8. Error Semántico - Intento de Acceso a Variables Locales de otra Función (Scope)
+    string error_semantico_ambito = 
+        "funcion externa() retornar numero {\n"
+        "    numero variableOculta = 99;\n"
+        "    retornar 0;\n"
+        "}\n"
+        "\n"
+        "vacio principal() {\n"
+        "    externa();\n"
+        "    mostrar(variableOculta);\n" // ERROR: No existe en el ámbito de principal
+        "}\n";
+    compilarYEjecutar("8. Error Semántico - Violación de Ámbito (Scope)", error_semantico_ambito);
+
+    // 9. Error Semántico - Duplicación y Colisión de Firmas de Funciones
+    string error_semantico_duplicado = 
+        "vacio miFuncion() {\n"
+        "    mostrar(1);\n"
+        "}\n"
+        "\n"
+        "funcion miFuncion(numero a) retornar numero {\n" // ERROR: Ya existe 'miFuncion'
+        "    retornar a;\n"
+        "}\n";
+    compilarYEjecutar("9. Error Semántico - Redefinición de Funciones", error_semantico_duplicado);
+
+    // 10. Error Semántico - Argumentos Inválidos en Conteo de Parámetros
+    string error_semantico_argumentos = 
+        "funcion procesar(numero a, numero b) retornar numero {\n"
+        "    retornar a * b;\n"
+        "}\n"
+        "\n"
+        "vacio principal() {\n"
+        "    numero test = procesar(5);\n" // ERROR: Falta el segundo parámetro
+        "}\n";
+    compilarYEjecutar("10. Error Semántico - Desajuste de Argumentos", error_semantico_argumentos);
+
+
+    // ----------------------------------------------------------------------
+    // ADVERTENCIAS Y AVISOS DE LIMPIEZA DE CÓDIGO
+    // ----------------------------------------------------------------------
     
-    string nuevo = 
-        "numero a = 4;\n"
-        "numero b = 5;\n"
-        "numero c = 6;\n"
-        "a + b * c";
-    compilarYEjecutar(" Prueba simple para ;", nuevo);
-
-
-
+    // Extra: Prueba de Variables Creadas pero Nunca Usadas
+    string aviso_limpieza = 
+        "numero globalInutil = 100;\n"
+        "vacio principal() {\n"
+        "    numero localInutil = 200;\n"
+        "    mostrar(\"Hola Mundo limpio\");\n"
+        "}\n";
+    compilarYEjecutar("EXTRA: Verificación de Advertencias por Variables No Usadas", aviso_limpieza);
 
     return 0;
 }
-

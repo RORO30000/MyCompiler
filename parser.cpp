@@ -1,31 +1,3 @@
-// parser.cpp — Analizador Sintáctico
-// Recibe la lista de tokens del lexer y verifica que el programa
-// esté bien formado según la gramática del lenguaje.
-//
-// Gramática soportada (notación informal):
-//
-//   programa      → sentencia* FIN
-//   sentencia     → declaracion
-//               | asignacion
-//               | si_stmt
-//               | mientras_stmt
-//               | mostrar_stmt
-//               | expr_stmt
-//
-//   declaracion   → "numero" VARIABLE "=" expresion ";"
-//   asignacion    → VARIABLE "=" expresion ";"
-//   si_stmt       → "si" "(" condicion ")" sentencia* ("sino" sentencia*)? "fin_si"
-//   mientras_stmt → "mientras" "(" condicion ")" sentencia* "fin_mientras"
-//   mostrar_stmt  → "mostrar" "(" (expresion | CADENA) ")" ";"
-//   expr_stmt     → expresion ";"
-//
-//   condicion     → expresion OP_COMP expresion
-//   OP_COMP       → "==" | "!=" | "<" | ">" | "<=" | ">="
-//
-//   expresion     → termino (("+"|"-") termino)*
-//   termino       → primario (("*"|"/"|"%") primario)*
-//   primario      → NUMERO | VARIABLE | "(" expresion ")" | "-" primario
-
 #include <cmath>
 #include <vector>
 #include <string>
@@ -35,268 +7,338 @@
 #include "errors.hpp"
 #include "semantic.hpp"
 
-// ─── Estado global del parser ─────────────────────────────────────
 static size_t              pos  = 0;
 static std::vector<Token>* tkns = nullptr;
 static TablaVariables      tabla;
+static TablaFunciones      tablaFunciones;
 
-// ─── Prototipos ───────────────────────────────────────────────────
-double parseExpresion(bool ejecutar = true);
-void   parseSentencia(bool ejecutar);
+static bool        solicitudRetorno = false;
+static std::string valorRetornado   = "0";
 
-// ─── Funciones auxiliares ─────────────────────────────────────────
+std::string parseExpresion(bool ejecutar = true);
+void        parseSentencia(bool ejecutar);
 
 Token& actual() { return (*tkns)[pos]; }
 
-// Avanza si el token actual es del tipo esperado; lanza error si no.
 Token consumir(TipoToken esperado) {
     if (actual().tipo != esperado)
-        throw std::runtime_error(
-            error_falta_token(tipoATexto(esperado), actual().linea)
-        );
+        throw std::runtime_error(error_falta_token(tipoATexto(esperado), actual().linea));
     return (*tkns)[pos++];
 }
 
 bool esTipo(TipoToken tipo) { return actual().tipo == tipo; }
 
-// ─── Nivel 3: primario ────────────────────────────────────────────
-double parsePrimario(bool ejecutar) {
+std::string tokenATipoTexto(TipoToken tipo) {
+    if (tipo == TipoToken::DECLARAR) return "numero";
+    if (tipo == TipoToken::BOOLEANO) return "booleano";
+    if (tipo == TipoToken::CARACTER) return "caracter";
+    if (tipo == TipoToken::VACIO)    return "vacio";
+    return "desconocido";
+}
+
+std::string ejecutarLlamadaFuncion(const std::string& nombreFunc, bool ejecutar) {
+    consumir(TipoToken::PAREN_IZ);
+    std::vector<std::string> argumentosEvaluados;
+    while (!esTipo(TipoToken::PAREN_DE)) {
+        argumentosEvaluados.push_back(parseExpresion(ejecutar));
+        if (esTipo(TipoToken::COMA)) pos++;
+    }
+    consumir(TipoToken::PAREN_DE);
+
+    if (!ejecutar) return "0";
+
+    ObjetoFuncion target = tablaFunciones.obtener(nombreFunc, actual().linea);
+    if (argumentosEvaluados.size() != target.parametros.size()) {
+        throw std::runtime_error(error_argumentos_invalidos(nombreFunc, target.parametros.size(), argumentosEvaluados.size(), actual().linea));
+    }
+
+    size_t posRetornoFlujoPrincipal = pos;
+    tabla.entrarAmbito();
+
+    for (size_t i = 0; i < target.parametros.size(); i++) {
+        tabla.declarar(target.parametros[i].second, target.parametros[i].first, argumentosEvaluados[i], actual().linea);
+    }
+
+    pos = target.posicionCuerpoTokens;
+    consumir(TipoToken::LLAVE_IZ);
+
+    solicitudRetorno = false;
+    valorRetornado   = "0";
+
+    while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
+        parseSentencia(true);
+        if (solicitudRetorno) break;
+    }
+
+    while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) pos++;
+    consumir(TipoToken::LLAVE_DE);
+
+    tabla.salirAmbito();
+    pos = posRetornoFlujoPrincipal;
+    solicitudRetorno = false;
+
+    return valorRetornado;
+}
+
+std::string parsePrimario(bool ejecutar) {
     Token t = actual();
 
-    if (t.tipo == TipoToken::NUMERO) {
-        pos++;
-        return std::stod(t.valor);
+    if (t.tipo == TipoToken::NUMERO || t.tipo == TipoToken::CADENA || t.tipo == TipoToken::LITERAL_BOOLEANO || t.tipo == TipoToken::LITERAL_CARACTER) {
+        pos++; return t.valor;
     }
-
     if (t.tipo == TipoToken::VARIABLE) {
+        if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::PAREN_IZ) {
+            pos++; return ejecutarLlamadaFuncion(t.valor, ejecutar);
+        }
         pos++;
-        if (ejecutar) return tabla.obtener(t.valor, t.linea);
-        // en modo "saltar" igual necesitamos un valor dummy
-        return 0.0;
+        if (ejecutar) return tabla.obtener(t.valor, t.linea).valor;
+        return "0";
     }
-
     if (t.tipo == TipoToken::PAREN_IZ) {
-        pos++;
-        double val = parseExpresion();  // parseExpresion usa ejecutar=true siempre
-        if (!esTipo(TipoToken::PAREN_DE))
-            throw std::runtime_error(error_parentesis_abierto(t.linea));
-        pos++;
-        return val;
+        pos++; std::string val = parseExpresion(ejecutar);
+        consumir(TipoToken::PAREN_DE); return val;
     }
-
-    if (t.tipo == TipoToken::PAREN_DE)
-        throw std::runtime_error(error_parentesis_cerrado(t.linea));
-
     if (t.tipo == TipoToken::RESTA) {
-        pos++;
-        return -parsePrimario(ejecutar);
+        pos++; double v = std::stod(parsePrimario(ejecutar)); return std::to_string(-v);
     }
-
     throw std::runtime_error(error_token_inesperado(t.valor, t.linea));
 }
 
-// ─── Nivel 2: término ────────────────────────────────────────────
-double parseTermino(bool ejecutar = true) {
-    double izq = parsePrimario(ejecutar);
-    while (esTipo(TipoToken::MULTIPLICA) ||
-           esTipo(TipoToken::DIVIDE)     ||
-           esTipo(TipoToken::MODULO)) {
-        TipoToken op  = actual().tipo;
-        int       lin = actual().linea;
-        pos++;
-        double der = parsePrimario(ejecutar);
+std::string parseTermino(bool ejecutar) {
+    std::string izqStr = parsePrimario(ejecutar);
+    while (esTipo(TipoToken::MULTIPLICA) || esTipo(TipoToken::DIVIDE) || esTipo(TipoToken::MODULO)) {
+        TipoToken op  = actual().tipo; int lin = actual().linea; pos++;
+        std::string derStr = parsePrimario(ejecutar);
         if (!ejecutar) continue;
-        if (op == TipoToken::DIVIDE && der == 0.0)
-            throw std::runtime_error(error_division_por_cero(lin));
-        if      (op == TipoToken::MULTIPLICA) izq *= der;
-        else if (op == TipoToken::DIVIDE)     izq /= der;
-        else                                  izq  = std::fmod(izq, der);
+        double izq = std::stod(izqStr); double der = std::stod(derStr);
+        if (op == TipoToken::DIVIDE && der == 0.0) throw std::runtime_error(error_division_por_cero(lin));
+        if (op == TipoToken::MULTIPLICA) izqStr = std::to_string(izq * der);
+        else if (op == TipoToken::DIVIDE) izqStr = std::to_string(izq / der);
+        else izqStr = std::to_string(std::fmod(izq, der));
     }
-    return izq;
+    return izqStr;
 }
 
-// ─── Nivel 1: expresión ───────────────────────────────────────────
-double parseExpresion(bool ejecutar) {
-    double izq = parseTermino(ejecutar);
+std::string parseExpresion(bool ejecutar) {
+    std::string izqStr = parseTermino(ejecutar);
     while (esTipo(TipoToken::SUMA) || esTipo(TipoToken::RESTA)) {
-        TipoToken op = actual().tipo;
-        pos++;
-        double der = parseTermino(ejecutar);
+        TipoToken op = actual().tipo; pos++;
+        std::string derStr = parseTermino(ejecutar);
         if (!ejecutar) continue;
-        izq = (op == TipoToken::SUMA) ? izq + der : izq - der;
+        double izq = std::stod(izqStr); double der = std::stod(derStr);
+        izqStr = (op == TipoToken::SUMA) ? std::to_string(izq + der) : std::to_string(izq - der);
     }
-    return izq;
+    return izqStr;
 }
 
-// ─── Condición ───────────────────────────────────────────────────
-// condicion → expresion OP_COMP expresion
-double parseCondicion(bool ejecutar = true) {
-    double izq = parseExpresion(ejecutar);
+std::string parseCondicion(bool ejecutar) {
+    std::string izqStr = parseExpresion(ejecutar);
+    TipoToken op = actual().tipo; pos++;
+    std::string derStr = parseExpresion(ejecutar);
+    if (!ejecutar) return "falso";
 
-    TipoToken op = actual().tipo;
-    if (op != TipoToken::IGUAL_IGUAL && op != TipoToken::DIFERENTE  &&
-        op != TipoToken::MENOR       && op != TipoToken::MAYOR      &&
-        op != TipoToken::MENOR_IGUAL && op != TipoToken::MAYOR_IGUAL)
-        throw std::runtime_error(
-            error_token_inesperado(actual().valor, actual().linea)
-        );
-    pos++;
-    double der = parseExpresion(ejecutar);
-    if (!ejecutar) return 0.0;
-
-    switch (op) {
-        case TipoToken::IGUAL_IGUAL: return (izq == der) ? 1.0 : 0.0;
-        case TipoToken::DIFERENTE:   return (izq != der) ? 1.0 : 0.0;
-        case TipoToken::MENOR:       return (izq <  der) ? 1.0 : 0.0;
-        case TipoToken::MAYOR:       return (izq >  der) ? 1.0 : 0.0;
-        case TipoToken::MENOR_IGUAL: return (izq <= der) ? 1.0 : 0.0;
-        case TipoToken::MAYOR_IGUAL: return (izq >= der) ? 1.0 : 0.0;
-        default: return 0.0;
+    bool resultado = false;
+    try {
+        double izq = std::stod(izqStr); double der = std::stod(derStr);
+        if (op == TipoToken::IGUAL_IGUAL) resultado = (izq == der);
+        if (op == TipoToken::DIFERENTE)   resultado = (izq != der);
+        if (op == TipoToken::MENOR)       resultado = (izq < der);
+        if (op == TipoToken::MAYOR)       resultado = (izq > der);
+        if (op == TipoToken::MENOR_IGUAL) resultado = (izq <= der);
+        if (op == TipoToken::MAYOR_IGUAL) resultado = (izq >= der);
+    } catch (...) {
+        if (op == TipoToken::IGUAL_IGUAL) resultado = (izqStr == derStr);
+        if (op == TipoToken::DIFERENTE)   resultado = (izqStr != derStr);
     }
+    return resultado ? "verdadero" : "falso";
 }
 
-// ─── Sentencias ───────────────────────────────────────────────────
-
-// declaracion → "numero" VARIABLE "=" expresion ";"
 void parseDeclaracion(bool ejecutar) {
-    pos++;  // consumir "numero"
+    std::string tipoVar = tokenATipoTexto(actual().tipo); pos++;
     Token nombreTok = consumir(TipoToken::VARIABLE);
     consumir(TipoToken::IGUAL);
-    double valor = parseExpresion(ejecutar);
+    std::string valor = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
-    if (ejecutar) tabla.declarar(nombreTok.valor, valor, nombreTok.linea);
+    if (ejecutar) tabla.declarar(nombreTok.valor, tipoVar, valor, nombreTok.linea);
 }
 
-// asignacion → VARIABLE "=" expresion ";"
+void parseDefinicionFuncion() {
+    std::string tipoRetorno = "vacio";
+    bool esSubrutinaVacia = esTipo(TipoToken::VACIO);
+    pos++; // Consumir 'funcion' o 'vacio'
+    
+    Token nombreFuncTok = consumir(TipoToken::VARIABLE);
+    consumir(TipoToken::PAREN_IZ);
+    
+    std::vector<std::pair<std::string, std::string>> parametros;
+    while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) {
+        std::string tipoParam = tokenATipoTexto(actual().tipo); 
+        pos++; // Consumir el tipo de dato
+        Token nombreParam = consumir(TipoToken::VARIABLE);
+        parametros.push_back({tipoParam, nombreParam.valor});
+        if (esTipo(TipoToken::COMA)) pos++;
+    }
+    consumir(TipoToken::PAREN_DE);
+
+    if (!esSubrutinaVacia) {
+        consumir(TipoToken::RETORNAR);
+        tipoRetorno = tokenATipoTexto(actual().tipo); 
+        pos++;
+    }
+
+    // Guardamos la posición exacta donde inicia la LLAVE IZQUIERDA
+    size_t posCuerpo = pos;
+
+    // SALTAR EL CUERPO: Avanzar tokens respetando estrictamente los bloques
+    int llavesAbiertas = 0;
+    if (esTipo(TipoToken::LLAVE_IZ)) {
+        llavesAbiertas++; 
+        pos++;
+        while (llavesAbiertas > 0 && !esTipo(TipoToken::FIN)) {
+            if (esTipo(TipoToken::LLAVE_IZ)) llavesAbiertas++;
+            if (esTipo(TipoToken::LLAVE_DE)) llavesAbiertas--;
+            if (llavesAbiertas > 0) pos++; // Solo avanzamos si no es la llave de cierre final
+        }
+        if (llavesAbiertas > 0) {
+            throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
+        }
+        consumir(TipoToken::LLAVE_DE); // Consumimos la llave final de manera segura
+    } else {
+        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+    }
+
+    // Registramos la función con la posición de inicio real de su cuerpo
+    ObjetoFuncion nuevaFunc = {tipoRetorno, nombreFuncTok.valor, parametros, posCuerpo};
+    tablaFunciones.registrar(nuevaFunc, nombreFuncTok.linea);
+}
+
 void parseAsignacion(const Token& varTok, bool ejecutar) {
-    pos++;  // consumir "="
-    double valor = parseExpresion(ejecutar);
+    pos++; std::string valor = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) tabla.asignar(varTok.valor, valor, varTok.linea);
 }
 
-// si_stmt → "si" "(" condicion ")" sentencia* ("sino" sentencia*)? "fin_si"
 void parseSi(bool ejecutar) {
-    pos++;  // consumir "si"
-    consumir(TipoToken::PAREN_IZ);
-    double cond = parseCondicion(ejecutar);
+    pos++; consumir(TipoToken::PAREN_IZ);
+    std::string cond = parseCondicion(ejecutar);
     consumir(TipoToken::PAREN_DE);
+    bool ramaCierta = ejecutar && (cond == "verdadero");
 
-    bool ramaCierta = ejecutar && (cond != 0.0);
-
-    // cuerpo rama verdadera
-    while (!esTipo(TipoToken::SINO)   &&
-           !esTipo(TipoToken::FIN_SI) &&
-           !esTipo(TipoToken::FIN))
-        parseSentencia(ramaCierta);
-
-    // rama falsa (opcional)
-    if (esTipo(TipoToken::SINO)) {
-        pos++;
-        bool ramaFalsa = ejecutar && (cond == 0.0);
-        while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN))
-            parseSentencia(ramaFalsa);
+    while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+        parseSentencia(ramaCierta); if (solicitudRetorno) break;
     }
-
+    if (esTipo(TipoToken::SINO)) {
+        pos++; bool ramaFalsa = ejecutar && (cond == "falso");
+        while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+            parseSentencia(ramaFalsa); if (solicitudRetorno) break;
+        }
+    }
     consumir(TipoToken::FIN_SI);
 }
 
-// mientras_stmt → "mientras" "(" condicion ")" sentencia* "fin_mientras"
-// Estrategia: guardamos la posición inicial del "mientras" para poder
-// re-evaluar la condición y el cuerpo en cada vuelta.
 void parseMientras(bool ejecutar) {
-    size_t posMientras = pos;
-    pos++;  // consumir "mientras"
-
+    size_t posMientras = pos; pos++;
     consumir(TipoToken::PAREN_IZ);
-    double cond = parseCondicion(ejecutar);
+    std::string cond = parseCondicion(ejecutar);
     consumir(TipoToken::PAREN_DE);
-
     size_t posCuerpo = pos;
 
-    // Si no se debe ejecutar, simplemente recorremos la estructura
     if (!ejecutar) {
-        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN))
-            parseSentencia(false);
-        consumir(TipoToken::FIN_MIENTRAS);
-        return;
+        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) parseSentencia(false);
+        consumir(TipoToken::FIN_MIENTRAS); return;
     }
 
-    int maxIter = 10000;   // límite de seguridad
-    while (cond != 0.0 && maxIter-- > 0) {
+    int maxIter = 10000;
+    while (cond == "verdadero" && maxIter-- > 0) {
         pos = posCuerpo;
-        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN))
-            parseSentencia(true);
-
-        // Re-evaluar condición
-        pos = posMientras + 1;  // saltar el token "mientras"
-        consumir(TipoToken::PAREN_IZ);
-        cond = parseCondicion(true);
-        consumir(TipoToken::PAREN_DE);
-        posCuerpo = pos;
+        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) {
+            parseSentencia(true); if (solicitudRetorno) break;
+        }
+        if (solicitudRetorno) break;
+        pos = posMientras + 1; consumir(TipoToken::PAREN_IZ); cond = parseCondicion(true); consumir(TipoToken::PAREN_DE); posCuerpo = pos;
     }
-
-    // Avanzar hasta fin_mientras (caso: condición ya era falsa)
-    if (cond == 0.0) {
-        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN))
-            parseSentencia(false);
+    if (cond == "falso" || solicitudRetorno) {
+        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
     }
-
     consumir(TipoToken::FIN_MIENTRAS);
 }
 
-// mostrar_stmt → "mostrar" "(" (CADENA | expresion) ")" ";"
 void parseMostrar(bool ejecutar) {
-    pos++;  // consumir "mostrar"
+    pos++;
     consumir(TipoToken::PAREN_IZ);
-
     if (esTipo(TipoToken::CADENA)) {
         if (ejecutar) std::cout << actual().valor << "\n";
         pos++;
     } else {
-        double val = parseExpresion(ejecutar);
+        std::string val = parseExpresion(ejecutar);
         if (ejecutar) std::cout << val << "\n";
     }
-
     consumir(TipoToken::PAREN_DE);
     consumir(TipoToken::PUNTO_COMA);
 }
 
-// ─── Despachador de sentencias ────────────────────────────────────
-// El parámetro `ejecutar` indica si la sentencia debe correr (true)
-// o simplemente recorrerse sin producir efectos (false), útil para
-// saltar ramas de si/sino que no corresponden.
 void parseSentencia(bool ejecutar) {
-    if (esTipo(TipoToken::DECLARAR)) { parseDeclaracion(ejecutar); return; }
+    if (solicitudRetorno) return;
+
+    if (esTipo(TipoToken::LLAVE_IZ) || esTipo(TipoToken::LLAVE_DE)) { pos++; return; }
+    if (esTipo(TipoToken::MOSTRAR))  { parseMostrar(ejecutar);     return; }
+    if (esTipo(TipoToken::DECLARAR) || esTipo(TipoToken::BOOLEANO) || esTipo(TipoToken::CARACTER)) { parseDeclaracion(ejecutar); return; }
+    if (esTipo(TipoToken::FUNCION) || esTipo(TipoToken::VACIO)) { parseDefinicionFuncion(); return; }
+    if (esTipo(TipoToken::RETORNAR)) {
+        pos++; std::string val = parseExpresion(ejecutar); consumir(TipoToken::PUNTO_COMA);
+        if (ejecutar) { solicitudRetorno = true; valorRetornado = val; }
+        return;
+    }
     if (esTipo(TipoToken::SI))       { parseSi(ejecutar);          return; }
     if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar);    return; }
-    if (esTipo(TipoToken::MOSTRAR))  { parseMostrar(ejecutar);     return; }
 
-    // ¿VARIABLE seguida de "="?  →  asignación
     if (esTipo(TipoToken::VARIABLE)) {
         Token varTok = actual();
+        if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::PAREN_IZ) {
+            pos++; ejecutarLlamadaFuncion(varTok.valor, ejecutar); consumir(TipoToken::PUNTO_COMA); return;
+        }
         if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::IGUAL) {
-            pos++;  // consumir VARIABLE
-            parseAsignacion(varTok, ejecutar);
-            return;
+            pos++; parseAsignacion(varTok, ejecutar); return;
         }
     }
-
-    // Expresión suelta  (para uso futuro: llamadas a función, etc.)
     parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
 }
 
-// ─── Punto de entrada del parser ─────────────────────────────────
 double parsear(std::vector<Token>& tokens) {
     pos   = 0;
     tkns  = &tokens;
     tabla = TablaVariables();
+    tablaFunciones = TablaFunciones();
+    solicitudRetorno = false;
 
-    while (!esTipo(TipoToken::FIN))
-        parseSentencia(true);
+    // Fase 1: Recolección global. Pasamos 'false' para registrar funciones y
+    // variables globales SIN ejecutar sus cuerpos ni llamadas internas de forma prematura.
+    while (!esTipo(TipoToken::FIN)) {
+        parseSentencia(false);
+    }
 
-    tabla.revisarNoUsadas();
+    // Fase 2: Si encontramos la rutina 'principal', la ejecutamos de verdad.
+    if (tablaFunciones.existe("principal")) {
+        size_t tokenFinal = pos;
+
+        // ejecutarLlamadaFuncion espera que pos apunte a '('.
+        // Como pos esta en FIN, inyectamos tokens virtuales '(' y ')' justo antes del token FIN.
+        Token tokParenIz; tokParenIz.tipo = TipoToken::PAREN_IZ; tokParenIz.valor = "("; tokParenIz.linea = 0;
+        Token tokParenDe; tokParenDe.tipo = TipoToken::PAREN_DE; tokParenDe.valor = ")"; tokParenDe.linea = 0;
+        tokens.insert(tokens.begin() + (long)tokenFinal, tokParenDe);
+        tokens.insert(tokens.begin() + (long)tokenFinal, tokParenIz);
+        // pos sigue apuntando a tokParenIz
+
+        ejecutarLlamadaFuncion("principal", true);
+
+        // Eliminamos los tokens virtuales
+        tokens.erase(tokens.begin() + (long)tokenFinal, tokens.begin() + (long)tokenFinal + 2);
+        pos = tokenFinal;
+    } else {
+        std::cout << "[INFO]: No se encontró la rutina 'principal()'. El programa finalizó de forma secuencial.\n";
+    }
+
+    tabla.revisarGlobalesNoUsadas();
     return 0.0;
 }
-
