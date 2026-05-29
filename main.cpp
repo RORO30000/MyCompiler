@@ -2,6 +2,9 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include <regex>
 #include "lexer.hpp"
 #include "errors.hpp"
 #include "semantic.hpp"
@@ -12,17 +15,60 @@ using namespace std;
 vector<Token> tokenizar(const string& fuente);
 double parsear(vector<Token>& tokens);
 
+std::string preprocesarBibliotecas(const std::string& codigoFuente) {
+    std::stringstream ss(codigoFuente);
+    std::string lineaTexto;
+    std::string codigoCompleto = "";
+    int numeroLinea = 1;
+
+    // Expresión regular para capturar: #incluir "archivo.txt"
+    std::regex regexIncluir(R"(^\s*#incluir\s+\"([^\"]+)\"\s*$)");
+    std::smatch match;
+
+    while (std::getline(ss, lineaTexto)) {
+        // Si la línea contiene un #incluir
+        if (std::regex_search(lineaTexto, match, regexIncluir)) {
+            std::string nombreArchivo = match[1].str();
+            
+            // Intentar abrir la biblioteca local
+            std::ifstream archivoBiblioteca(nombreArchivo);
+            if (!archivoBiblioteca.is_open()) {
+                throw std::runtime_error(error_archivo_no_encontrado(nombreArchivo, numeroLinea));
+            }
+
+            // Leer todo el contenido de la biblioteca
+            std::stringstream contenidoBiblioteca;
+            contenidoBiblioteca << archivoBiblioteca.rdbuf();
+            archivoBiblioteca.close();
+
+            // Procesar recursivamente por si la biblioteca tiene otros #incluir
+            codigoCompleto += preprocesarBibliotecas(contenidoBiblioteca.str()) + "\n";
+        } else if (lineaTexto.find("#incluir") != std::string::npos) {
+            // Si tiene la palabra pero no pasó la expresión regular, está mal escrita
+            throw std::runtime_error(error_directiva_biblioteca_mal(numeroLinea));
+        } else {
+            // Línea de código común y corriente
+            codigoCompleto += lineaTexto + "\n";
+        }
+        numeroLinea++;
+    }
+    return codigoCompleto;
+}
+
 void compilarYEjecutar(const string& titulo, const string& codigo) {
     cout << "\n==================================================\n";
     cout << " PRUEBA: " << titulo << "\n";
     cout << "==================================================\n";
-    cout << "Código Fuente:\n" << codigo << "\n";
+    cout << "Código Fuente Original:\n" << codigo << "\n";
     cout << "--------------------------------------------------\n";
     cout << "Salida / Resultado:\n";
     
     try {
-        auto tokens = tokenizar(codigo);
-        // El parser procesa las declaraciones y despacha 'principal()' si existe
+        // PASO NUEVO: El preprocesador une las bibliotecas primero
+        std::string codigoExpandido = preprocesarBibliotecas(codigo);
+        
+        // El lexer ahora procesa el código con las bibliotecas ya incrustadas
+        auto tokens = tokenizar(codigoExpandido);
         parsear(tokens); 
         cout << "\n✓ Fin de la sección de pruebas sin caídas críticas.\n";
     } catch (const exception& e) {
@@ -163,5 +209,31 @@ int main() {
         "}\n";
     compilarYEjecutar("EXTRA: Verificación de Advertencias por Variables No Usadas", aviso_limpieza);
 
+    // 11. Prueba de Modularidad y Bibliotecas Externas (#incluir)
+    string prueba_bibliotecas = 
+        "#incluir \"matematica.txt\"\n"
+        "\n"
+        "vacio principal() {\n"
+        "    numero miBase = 2;\n"
+        "    numero miExponente = 3;\n"
+        "    // Usando función de la biblioteca externa\n"
+        "    numero pot = calcularPotencia(miBase, miExponente);\n"
+        "    numero cuad = calcularCuadrado(10);\n"
+        "    \n"
+        "    mostrar(\"Resultado Potencia de la biblioteca:\");\n"
+        "    mostrar(pot);\n"
+        "    mostrar(\"Resultado Cuadrado de la biblioteca:\");\n"
+        "    mostrar(cuad);\n"
+        "}\n";
+    compilarYEjecutar("11. Importación de Bibliotecas Locales (Éxito)", prueba_bibliotecas);
+
+    // 12. Prueba de Error - Biblioteca No Existe
+    string error_biblioteca_inexistente = 
+        "#incluir \"libreria_fantasma.txt\"\n"
+        "vacio principal() {\n"
+        "    mostrar(1);\n"
+        "}\n";
+    compilarYEjecutar("12. Error Semántico/Sistema - Biblioteca Inexistente", error_biblioteca_inexistente);
+  
     return 0;
 }
