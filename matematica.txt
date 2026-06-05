@@ -1,0 +1,13 @@
+funcion calcularPotencia(numero base, numero exponente) retornar numero {
+    numero resultado = 1;
+    numero i = 0;
+    mientras (i < exponente)
+        resultado = resultado * base;
+        i = i + 1;
+    fin_mientras
+    retornar resultado;
+}
+
+funcion calcularCuadrado(numero n) retornar numero {
+    retornar n * n;
+}

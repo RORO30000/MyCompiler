@@ -133,3 +133,15 @@ inline std::string exito_compilacion() {
 inline std::string exito_ejecucion(const std::string& resultado) {
     return "\n✓ Resultado: " + resultado + "\n";
 }
+
+inline std::string error_archivo_no_encontrado(const std::string& nombre, int linea) {
+    return "\n[ERROR DE SISTEMA - Línea " + std::to_string(linea) + "]\n"
+           "  No se pudo abrir la biblioteca '" + nombre + "'.\n"
+           "  Verifica que el archivo exista en la misma carpeta.\n";
+}
+
+inline std::string error_directiva_biblioteca_mal(int linea) {
+    return "\n[ERROR SINTÁCTICO - Línea " + std::to_string(linea) + "]\n"
+           "  La directiva #incluir está mal escrita.\n"
+           "  El formato correcto es: #incluir \"nombre_archivo.txt\"\n";
+}
