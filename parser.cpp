@@ -164,26 +164,36 @@ void parseDeclaracion(bool ejecutar) {
 
 void parseDefinicionFuncion() {
     std::string tipoRetorno = "vacio";
+
+    // ── Caso 1: Subrutina sin retorno →  vacio nombre(...) { }
+    // ── Caso 2: Función con retorno  →  funcion nombre(...) retornar tipo { }
     bool esSubrutinaVacia = esTipo(TipoToken::VACIO);
-    pos++; // Consumir 'funcion' o 'vacio'
-    
+
+    if (esSubrutinaVacia) {
+        pos++; // Consumir 'vacio'
+    } else {
+        pos++; // Consumir 'funcion'
+    }
+
+    // El siguiente token SIEMPRE debe ser el nombre de la función
     Token nombreFuncTok = consumir(TipoToken::VARIABLE);
     consumir(TipoToken::PAREN_IZ);
     
     std::vector<std::pair<std::string, std::string>> parametros;
     while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) {
         std::string tipoParam = tokenATipoTexto(actual().tipo); 
-        pos++; // Consumir el tipo de dato
+        pos++; // Consumir el tipo del parámetro
         Token nombreParam = consumir(TipoToken::VARIABLE);
         parametros.push_back({tipoParam, nombreParam.valor});
         if (esTipo(TipoToken::COMA)) pos++;
     }
     consumir(TipoToken::PAREN_DE);
 
+    // Solo las funciones declaradas con 'funcion' llevan 'retornar tipo'
     if (!esSubrutinaVacia) {
         consumir(TipoToken::RETORNAR);
         tipoRetorno = tokenATipoTexto(actual().tipo); 
-        pos++;
+        pos++; // Consumir el tipo de retorno
     }
 
     // Guardamos la posición exacta donde inicia la LLAVE IZQUIERDA
