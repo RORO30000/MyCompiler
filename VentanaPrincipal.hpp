@@ -2,27 +2,110 @@
 #include <QMainWindow>
 #include <QTextEdit>
 #include <QPushButton>
+#include <QLabel>
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSplitter>
+#include <QScrollArea>
+#include <QPropertyAnimation>
+#include <QTimer>
+#include <QScrollBar>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QPainter>
+#include <QResizeEvent>
 #include <string>
+#include <vector>
+#include "eventos.hpp"
 
+// ─── Gutter de números de línea ──────────────────────────────────
+class LineNumberArea : public QWidget {
+    Q_OBJECT
+public:
+    explicit LineNumberArea(QTextEdit* editor);
+    int gutterWidth();
+protected:
+    void paintEvent(QPaintEvent* ev) override;
+private:
+    QTextEdit* _ed;
+};
+
+// ─── Editor con gutter integrado ─────────────────────────────────
+class CodeEditor : public QTextEdit {
+    Q_OBJECT
+public:
+    explicit CodeEditor(QWidget* parent = nullptr);
+protected:
+    void resizeEvent(QResizeEvent* ev) override;
+    void scrollContentsBy(int dx, int dy) override;
+private slots:
+    void _updateGutter();
+private:
+    LineNumberArea* _gutter;
+};
+
+// ─── Ventana Principal ────────────────────────────────────────────
 class VentanaPrincipal : public QMainWindow {
     Q_OBJECT
 
 public:
-    VentanaPrincipal(QWidget *parent = nullptr);
+    explicit VentanaPrincipal(QWidget* parent = nullptr);
     ~VentanaPrincipal() = default;
 
 private slots:
-    // Evento que se dispara al pulsar el botón "Compilar y Ejecutar"
     void manejarEjecucion();
+    void avanzarPaso();
+    void retrocederPaso();
 
 private:
-    // Componentes de la Interfaz Gráfica
-    QTextEdit* editorCodigo;     // Entrada de código fuente
-    QTextEdit* consolaSalida;    // Salida de textos y errores
-    QWidget* lienzoAnimacion;  // ¡ZONA DE EXPANSIÓN PARA TUS GRÁFICOS FUTUROS!
-    QPushButton* botonEjecutar;    // Botón de arranque
+    // ── Widgets ───────────────────────────────────────────────────
+    CodeEditor*  editorCodigo;
+    QTextEdit*   consolaSalida;
+    QPushButton* botonEjecutar;
+    QPushButton* botonSiguiente;
+    QPushButton* botonAnterior;
+    QLabel*      etiquetaPaso;
+
+    // Panel derecho
+    QWidget*     panelAnimacion;
+    QLabel*      tituloVariables;
+    QWidget*     zonaTarjetas;
+    QHBoxLayout* layoutTarjetas;
+    QLabel*      tituloArreglo;
+    QWidget*     zonaArreglo;
+    QHBoxLayout* layoutArreglo;
+    QLabel*      etiquetaEstado;
+
+    // ── Cola de pasos ─────────────────────────────────────────────
+    std::vector<EventoPaso> pasos;
+    int pasoActual = 0;
+
+    // ── Snapshot ─────────────────────────────────────────────────
+    struct SnapshotUI {
+        std::vector<std::pair<std::string,std::string>> variables;
+        std::vector<std::string> celdas;
+        std::string nombreArr;
+        int         indiceArr    = -1;
+        int         lineaActiva  = -1;
+        std::string mensajeEstado;
+        bool        mensajeError = false;
+    };
+    std::vector<SnapshotUI> historial;
+    SnapshotUI estadoActual;
+
+    // ── Helpers ───────────────────────────────────────────────────
+    void aplicarEvento(const EventoPaso& ev);
+    void restaurarSnapshot(const SnapshotUI& snap);
+    void resaltarLinea(int linea);
+    void actualizarTarjetaVariable(const std::string& nombre,
+                                   const std::string& valor, bool esNueva);
+    void actualizarVistaArreglo(const std::string& nombre,
+                                const std::vector<std::string>& celdas,
+                                int indiceActivo);
+    void limpiarTarjetas();
+    void limpiarArreglo();
+    void setMensajeEstado(const std::string& msg, bool esError = false);
+    void actualizarBotones();
 };
