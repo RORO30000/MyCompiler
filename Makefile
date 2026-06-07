@@ -27,6 +27,9 @@ TARGET   = ide_grafico
 SRCS     = main_gui.cpp VentanaPrincipal.cpp lexer.cpp parser.cpp preprocesador.cpp
 OBJS     = $(SRCS:.cpp=.o) moc_VentanaPrincipal.o
 
+# ── Cabeceras compartidas (cualquier cambio fuerza recompilación) ─────────────
+HEADERS  = lexer.hpp semantic.hpp errors.hpp eventos.hpp VentanaPrincipal.hpp
+
 # ── Regla Principal: Compila Todo ────────────────────────────────────────────
 all: $(TARGET)
 
@@ -38,7 +41,7 @@ $(TARGET): $(OBJS)
 
 # ── Reglas de Compilación Independientes ─────────────────────────────────────
 
-VentanaPrincipal.o: VentanaPrincipal.cpp VentanaPrincipal.hpp lexer.hpp errors.hpp
+VentanaPrincipal.o: VentanaPrincipal.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c VentanaPrincipal.cpp -o VentanaPrincipal.o
 
 main_gui.o: main_gui.cpp VentanaPrincipal.hpp
@@ -47,11 +50,11 @@ main_gui.o: main_gui.cpp VentanaPrincipal.hpp
 moc_VentanaPrincipal.o: moc_VentanaPrincipal.cpp
 	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c moc_VentanaPrincipal.cpp -o moc_VentanaPrincipal.o
 
-%.o: %.cpp semantic.hpp lexer.hpp errors.hpp
+%.o: %.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # ── Generador MOC Adaptativo ─────────────────────────────────────────────────
-moc_VentanaPrincipal.cpp: VentanaPrincipal.hpp
+moc_VentanaPrincipal.cpp: VentanaPrincipal.hpp eventos.hpp
 	$(MOC_ENV) $(MOC_BIN) VentanaPrincipal.hpp -o moc_VentanaPrincipal.cpp
 
 # ── Ejecutar la Aplicación ───────────────────────────────────────────────────
@@ -70,4 +73,3 @@ clean:
 	@echo "Limpieza lista. Todos los binarios y archivos temporales eliminados."
 
 .PHONY: all run go clean
-
