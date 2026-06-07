@@ -12,6 +12,7 @@ static TipoToken palabraReservada(const std::string& palabra) {
     if (palabra == "vacio")         return TipoToken::VACIO;
     if (palabra == "funcion")       return TipoToken::FUNCION;
     if (palabra == "retornar")      return TipoToken::RETORNAR;
+    if (palabra == "arreglo")       return TipoToken::ARREGLO;
     if (palabra == "si")            return TipoToken::SI;
     if (palabra == "sino")          return TipoToken::SINO;
     if (palabra == "fin_si")        return TipoToken::FIN_SI;
@@ -34,7 +35,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         if (c == '\n') { linea++; i++; continue; }
         if (isspace(c)) { i++; continue; }
 
-        // Comentarios y Bloques
+        // Comentarios de línea y bloque
         if (c == '/' && i + 1 < fuente.size()) {
             if (fuente[i + 1] == '/') {
                 while (i < fuente.size() && fuente[i] != '\n') i++;
@@ -68,7 +69,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             continue;
         }
 
-        // Caracteres individuales ('A')
+        // Caracteres individuales
         if (c == '\'') {
             std::string car = ""; i++;
             if (i < fuente.size() && fuente[i] != '\'') { car += fuente[i]; i++; }
@@ -88,7 +89,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             continue;
         }
 
-        // Identificadores y Palabras Clave
+        // Identificadores y palabras clave
         if (isalpha(c) || c == '_') {
             std::string palabra = "";
             while (i < fuente.size() && (isalnum(fuente[i]) || fuente[i] == '_')) {
@@ -98,7 +99,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             continue;
         }
 
-        // Operadores y símbolos
+        // Operadores dobles
         if (c == '=') {
             if (i + 1 < fuente.size() && fuente[i + 1] == '=') {
                 tokens.push_back({TipoToken::IGUAL_IGUAL, "==", linea}); i += 2;
@@ -107,11 +108,8 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             }
             continue;
         }
-        if (c == '!') {
-            if (i + 1 < fuente.size() && fuente[i + 1] == '=') {
-                tokens.push_back({TipoToken::DIFERENTE, "!=", linea}); i += 2;
-                continue;
-            }
+        if (c == '!' && i + 1 < fuente.size() && fuente[i + 1] == '=') {
+            tokens.push_back({TipoToken::DIFERENTE, "!=", linea}); i += 2; continue;
         }
         if (c == '<') {
             if (i + 1 < fuente.size() && fuente[i + 1] == '=') { tokens.push_back({TipoToken::MENOR_IGUAL, "<=", linea}); i += 2; }
@@ -125,18 +123,20 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         }
 
         switch (c) {
-            case '+': tokens.push_back({TipoToken::SUMA, "+", linea}); break;
-            case '-': tokens.push_back({TipoToken::RESTA, "-", linea}); break;
-            case '*': tokens.push_back({TipoToken::MULTIPLICA, "*", linea}); break;
-            case '/': tokens.push_back({TipoToken::DIVIDE, "/", linea}); break;
-            case '%': tokens.push_back({TipoToken::MODULO, "%", linea}); break;
-            case '(': tokens.push_back({TipoToken::PAREN_IZ, "(", linea}); break;
-            case ')': tokens.push_back({TipoToken::PAREN_DE, ")", linea}); break;
-            case '{': tokens.push_back({TipoToken::LLAVE_IZ, "{", linea}); break;
-            case '}': tokens.push_back({TipoToken::LLAVE_DE, "}", linea}); break;
-            case ';': tokens.push_back({TipoToken::PUNTO_COMA, ";", linea}); break;
-            case ',': tokens.push_back({TipoToken::COMA, ",", linea}); break;
-            default: throw std::runtime_error(error_lexico_caracter(c, linea));
+            case '+': tokens.push_back({TipoToken::SUMA,         "+", linea}); break;
+            case '-': tokens.push_back({TipoToken::RESTA,        "-", linea}); break;
+            case '*': tokens.push_back({TipoToken::MULTIPLICA,   "*", linea}); break;
+            case '/': tokens.push_back({TipoToken::DIVIDE,       "/", linea}); break;
+            case '%': tokens.push_back({TipoToken::MODULO,       "%", linea}); break;
+            case '(': tokens.push_back({TipoToken::PAREN_IZ,     "(", linea}); break;
+            case ')': tokens.push_back({TipoToken::PAREN_DE,     ")", linea}); break;
+            case '{': tokens.push_back({TipoToken::LLAVE_IZ,     "{", linea}); break;
+            case '}': tokens.push_back({TipoToken::LLAVE_DE,     "}", linea}); break;
+            case '[': tokens.push_back({TipoToken::CORCHETE_IZ,  "[", linea}); break;
+            case ']': tokens.push_back({TipoToken::CORCHETE_DE,  "]", linea}); break;
+            case ';': tokens.push_back({TipoToken::PUNTO_COMA,   ";", linea}); break;
+            case ',': tokens.push_back({TipoToken::COMA,         ",", linea}); break;
+            default:  throw std::runtime_error(error_lexico_caracter(c, linea));
         }
         i++;
     }

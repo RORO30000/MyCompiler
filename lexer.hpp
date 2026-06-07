@@ -8,7 +8,9 @@ enum class TipoToken {
     IGUAL_IGUAL, DIFERENTE, MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL,
     IGUAL, COMA,
     PAREN_IZ, PAREN_DE, LLAVE_IZ, LLAVE_DE, PUNTO_COMA,
+    CORCHETE_IZ, CORCHETE_DE,                          // [ ]  para arreglos
     DECLARAR, BOOLEANO, CARACTER, VACIO, FUNCION, RETORNAR,
+    ARREGLO,                                            // palabra clave "arreglo"
     SI, SINO, FIN_SI, MIENTRAS, FIN_MIENTRAS, MOSTRAR, LEER,
     VARIABLE, FIN
 };
@@ -22,13 +24,15 @@ struct Token {
 // Utilidad para imprimir nombres de tokens en errores
 inline std::string tipoATexto(TipoToken tipo) {
     switch(tipo) {
-        case TipoToken::PAREN_IZ: return "(";
-        case TipoToken::PAREN_DE: return ")";
-        case TipoToken::LLAVE_IZ: return "{";
-        case TipoToken::LLAVE_DE: return "}";
-        case TipoToken::PUNTO_COMA: return ";";
-        case TipoToken::COMA: return ",";
-        case TipoToken::IGUAL: return "=";
-        default: return "token";
+        case TipoToken::PAREN_IZ:      return "(";
+        case TipoToken::PAREN_DE:      return ")";
+        case TipoToken::LLAVE_IZ:      return "{";
+        case TipoToken::LLAVE_DE:      return "}";
+        case TipoToken::CORCHETE_IZ:   return "[";
+        case TipoToken::CORCHETE_DE:   return "]";
+        case TipoToken::PUNTO_COMA:    return ";";
+        case TipoToken::COMA:          return ",";
+        case TipoToken::IGUAL:         return "=";
+        default:                       return "token";
     }
 }
