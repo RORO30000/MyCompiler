@@ -18,7 +18,9 @@
 #include <QResizeEvent>
 #include <string>
 #include <vector>
+#include <QComboBox>
 #include "eventos.hpp"
+
 
 // ─── Gutter de números de línea ──────────────────────────────────
 class LineNumberArea : public QWidget {
@@ -58,12 +60,14 @@ private slots:
     void manejarEjecucion();
     void avanzarPaso();
     void retrocederPaso();
+    void cargarPlantilla(const QString& nombre);
 
 private:
     // ── Widgets ───────────────────────────────────────────────────
     CodeEditor*  editorCodigo;
     QTextEdit*   consolaSalida;
     QPushButton* botonEjecutar;
+    QComboBox*   comboPlantillas;
     QPushButton* botonSiguiente;
     QPushButton* botonAnterior;
     QLabel*      etiquetaPaso;

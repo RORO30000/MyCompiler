@@ -13,6 +13,7 @@
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QTextBlock>
+#include <QComboBox>
 
 // ── Prototipos externos ───────────────────────────────────────────
 std::vector<Token>  tokenizar(const std::string&);
@@ -23,28 +24,24 @@ std::string         preprocesarBibliotecas(const std::string&);
 //  Paleta de colores centralizada
 // ═════════════════════════════════════════════════════════════════
 namespace Pal {
-    // Fondos
-    static const char* BG_APP      = "#1e1e1e";   // fondo general
+    static const char* BG_APP      = "#1e1e1e";
     static const char* BG_EDITOR   = "#1e1e1e";
-    static const char* BG_CONSOLE  = "#141414";
-    static const char* BG_PANEL    = "#1a1a2e";
-    static const char* BG_GUTTER   = "#252526";
-    static const char* BG_MENUBAR  = "#2d2d2d";
+    static const char* BG_CONSOLE  = "#181818";
+    static const char* BG_PANEL    = "#252526";
+    static const char* BG_GUTTER   = "#2d2d30";
+    static const char* BG_MENUBAR  = "#2d2d30";
 
-    // Acento
-    static const char* ACCENT_BLUE  = "#3b82f6";   // compilar
-    static const char* ACCENT_GREEN = "#22c55e";   // siguiente
-    static const char* ACCENT_GRAY  = "#52525b";   // anterior / deshabilitado
+    static const char* ACCENT_BLUE  = "#007acc";
+    static const char* ACCENT_GREEN = "#16a34a";
+    static const char* ACCENT_GRAY  = "#4b5563";
 
-    // Hover
-    static const char* H_BLUE  = "#2563eb";
-    static const char* H_GREEN = "#16a34a";
-    static const char* H_GRAY  = "#71717a";
+    static const char* H_BLUE  = "#1d4ed8";
+    static const char* H_GREEN = "#15803d";
+    static const char* H_GRAY  = "#6b7280";
 
-    // Texto
-    static const char* TXT_MAIN  = "#d4d4d4";
-    static const char* TXT_DIM   = "#6b7280";
-    static const char* TXT_OK    = "#86efac";
+    static const char* TXT_MAIN = "#d4d4d4";
+    static const char* TXT_DIM  = "#9ca3af";
+    static const char* TXT_OK   = "#86efac";
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -157,6 +154,7 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     resize(1300, 800);
     setStyleSheet(QString("QMainWindow { background:%1; }").arg(Pal::BG_APP));
 
+
     // ── Barra de menú (decorativa, sin acción aún) ────────────────
     QMenuBar* mb = menuBar();
     mb->setStyleSheet(
@@ -225,6 +223,19 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     botonEjecutar  = makeBtn("▶  Compilar",  Pal::ACCENT_BLUE,  Pal::H_BLUE,  this);
     botonAnterior  = makeBtn("◀  Anterior",  Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
     botonSiguiente = makeBtn("Siguiente  ▶", Pal::ACCENT_GREEN, Pal::H_GREEN, this);
+
+    // Combos
+    comboPlantillas = new QComboBox(this);
+
+    comboPlantillas->addItem("Plantillas...");
+    comboPlantillas->addItem("Nuevo archivo");
+    comboPlantillas->addItem("Hola Mundo");
+    comboPlantillas->addItem("Variables");
+    comboPlantillas->addItem("Si");
+    comboPlantillas->addItem("Mientras");
+    comboPlantillas->addItem("Funcion");
+    comboPlantillas->addItem("Arreglo");
+
     botonSiguiente->setEnabled(false);
     botonAnterior->setEnabled(false);
 
@@ -323,7 +334,10 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     QHBoxLayout* layToolbar = new QHBoxLayout(toolbar);
     layToolbar->setContentsMargins(8, 4, 8, 4);
     layToolbar->setSpacing(6);
+    
     layToolbar->addWidget(botonEjecutar);
+    layToolbar->addSpacing(10);
+    layToolbar->addWidget(comboPlantillas);
     layToolbar->addSpacing(10);
 
     // separador visual entre compilar y navegación
@@ -359,16 +373,85 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     splitter->setSizes({680, 520});
 
     layMain->addWidget(splitter, 1);
-
+    
     // ── Conexiones ────────────────────────────────────────────────
     connect(botonEjecutar,  &QPushButton::clicked, this, &VentanaPrincipal::manejarEjecucion);
     connect(botonSiguiente, &QPushButton::clicked, this, &VentanaPrincipal::avanzarPaso);
     connect(botonAnterior,  &QPushButton::clicked, this, &VentanaPrincipal::retrocederPaso);
+    connect(comboPlantillas,
+        &QComboBox::currentTextChanged,
+        this,
+        &VentanaPrincipal::cargarPlantilla);
 }
+    void VentanaPrincipal::cargarPlantilla(const QString& nombre)
+    {
+        if(nombre == "Plantillas...")
+            return;
 
-// ═════════════════════════════════════════════════════════════════
-//  manejarEjecucion
-// ═════════════════════════════════════════════════════════════════
+        if(nombre == "Nuevo archivo")
+        {
+            editorCodigo->clear();
+            comboPlantillas->setCurrentIndex(0);
+            return;
+        }
+
+        QString codigo;
+
+        if(nombre == "Hola Mundo")
+        {
+            codigo =
+                "\nmostrar(\"Hola Mundo\");\n";
+        }
+
+        else if(nombre == "Variables")
+        {
+            codigo =
+                "\nnumero edad = 18;\n"
+                "booleano activo = verdadero;\n"
+                "caracter inicial = 'R';\n";
+        }
+
+        else if(nombre == "Si")
+        {
+            codigo =
+                "\nsi(edad >= 18){\n"
+                "    mostrar(\"Mayor de edad\");\n"
+                "}\n"
+                "fin_si\n";
+        }
+
+        else if(nombre == "Mientras")
+        {
+            codigo =
+                "\nnumero contador = 0;\n"
+                "\n"
+                "mientras(contador < 10){\n"
+                "    mostrar(contador);\n"
+                "    contador = contador + 1;\n"
+                "}\n"
+                "fin_mientras\n";
+        }
+
+        else if(nombre == "Funcion")
+        {
+            codigo =
+                "\nfuncion numero sumar(numero a, numero b){\n"
+                "    retornar a + b;\n"
+                "}\n";
+        }
+
+        else if(nombre == "Arreglo")
+        {
+            codigo =
+                "\narreglo numeros[5];\n";
+        }
+
+        QTextCursor cursor = editorCodigo->textCursor();
+        cursor.insertText(codigo);
+
+        comboPlantillas->setCurrentIndex(0);
+    }
+
 void VentanaPrincipal::manejarEjecucion() {
     consolaSalida->clear();
     consolaSalida->setStyleSheet(
@@ -792,3 +875,4 @@ void VentanaPrincipal::actualizarBotones() {
     etiquetaPaso->setText(
         hay ? QString("Paso %1 / %2").arg(pasoActual).arg(pasos.size()) : "—");
 }
+
