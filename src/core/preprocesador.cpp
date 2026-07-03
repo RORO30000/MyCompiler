@@ -3,7 +3,7 @@
 #include <fstream>
 #include <regex>
 #include <stdexcept>
-#include "errors.hpp"
+#include "core/errors.hpp"
 
 // Versión completa del preprocesador (usada tanto en consola como en GUI)
 std::string preprocesarBibliotecas(const std::string& codigoFuente) {

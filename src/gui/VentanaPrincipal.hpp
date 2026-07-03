@@ -19,7 +19,10 @@
 #include <string>
 #include <vector>
 #include <QComboBox>
-#include "eventos.hpp"
+#include <QDialog>
+#include <QKeyEvent>
+#include <QCloseEvent>
+#include "core/eventos.hpp"
 
 
 // ─── Gutter de números de línea ──────────────────────────────────
@@ -42,6 +45,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent* ev) override;
     void scrollContentsBy(int dx, int dy) override;
+    void keyPressEvent(QKeyEvent* ev) override;
 private slots:
     void _updateGutter();
 private:
@@ -56,16 +60,23 @@ public:
     explicit VentanaPrincipal(QWidget* parent = nullptr);
     ~VentanaPrincipal() = default;
 
+protected:
+    void closeEvent(QCloseEvent* ev) override;
+
 private slots:
     void manejarEjecucion();
     void avanzarPaso();
     void retrocederPaso();
     void cargarPlantilla(const QString& nombre);
+    void nuevoArchivo();
+    void abrirArchivo();
+    void guardarArchivo();
+    void guardarComoArchivo();
+    void salirAplicacion();
 
 private:
     // ── Widgets ───────────────────────────────────────────────────
     CodeEditor*  editorCodigo;
-    QTextEdit*   consolaSalida;
     QPushButton* botonEjecutar;
     QComboBox*   comboPlantillas;
     QPushButton* botonSiguiente;
@@ -99,8 +110,12 @@ private:
     std::vector<SnapshotUI> historial;
     SnapshotUI estadoActual;
 
+    // ── Archivo actual ────────────────────────────────────────────
+    QString rutaActual;
+
     // ── Helpers ───────────────────────────────────────────────────
     void aplicarEvento(const EventoPaso& ev);
+    void mostrarTerminal(const std::string& contenido);
     void restaurarSnapshot(const SnapshotUI& snap);
     void resaltarLinea(int linea);
     void actualizarTarjetaVariable(const std::string& nombre,

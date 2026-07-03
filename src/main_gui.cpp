@@ -1,5 +1,5 @@
 #include <QApplication>
-#include "VentanaPrincipal.hpp"
+#include "gui/VentanaPrincipal.hpp"
 
 int main(int argc, char *argv[]) {
     // Inicializador obligatorio del motor de interfaz gráfica de Qt
