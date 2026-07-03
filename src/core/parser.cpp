@@ -1,12 +1,13 @@
 #include <cmath>
 #include <vector>
 #include <string>
+#include <sstream>
 #include <stdexcept>
 #include <iostream>
-#include "lexer.hpp"
-#include "errors.hpp"
-#include "semantic.hpp"
-#include "eventos.hpp"
+#include "core/lexer.hpp"
+#include "core/errors.hpp"
+#include "core/semantic.hpp"
+#include "core/eventos.hpp"
 
 // ─── Estado global del parser ────────────────────────────────────
 static size_t              pos  = 0;
@@ -20,6 +21,9 @@ static std::string valorRetornado   = "0";
 // Cola de eventos para la animación (null en modo consola)
 static std::vector<EventoPaso>* colaEventos = nullptr;
 
+// Hook para lectura de entrada (null → usa std::cin)
+static std::string (*inputHook)() = nullptr;
+
 // ─── Emitir un evento a la cola ──────────────────────────────────
 static void emitir(EventoPaso ev) {
     if (colaEventos) colaEventos->push_back(std::move(ev));
@@ -28,6 +32,10 @@ static void emitir(EventoPaso ev) {
 // ─── Helpers ─────────────────────────────────────────────────────
 std::string parseExpresion(bool ejecutar = true);
 void        parseSentencia(bool ejecutar);
+
+void setInputHook(std::string (*hook)()) {
+    inputHook = hook;
+}
 
 Token& actual() { return (*tkns)[pos]; }
 
@@ -40,11 +48,26 @@ Token consumir(TipoToken esperado) {
 bool esTipo(TipoToken tipo) { return actual().tipo == tipo; }
 
 std::string tokenATipoTexto(TipoToken tipo) {
-    if (tipo == TipoToken::DECLARAR) return "numero";
-    if (tipo == TipoToken::BOOLEANO) return "booleano";
-    if (tipo == TipoToken::CARACTER) return "caracter";
-    if (tipo == TipoToken::VACIO)    return "vacio";
+    if (tipo == TipoToken::ENTERO)      return "entero";
+    if (tipo == TipoToken::DECIMAL)     return "decimal";
+    if (tipo == TipoToken::TIPO_CADENA) return "cadena";
+    if (tipo == TipoToken::BOOLEANO)    return "booleano";
+    if (tipo == TipoToken::CARACTER)    return "caracter";
+    if (tipo == TipoToken::VACIO)       return "vacio";
     return "desconocido";
+}
+
+bool esTipoDeclaracion(TipoToken t) {
+    return t == TipoToken::ENTERO || t == TipoToken::DECIMAL ||
+           t == TipoToken::TIPO_CADENA || t == TipoToken::BOOLEANO ||
+           t == TipoToken::CARACTER;
+}
+
+std::string formatearNumero(double v) {
+    std::string s = std::to_string(v);
+    auto pos = s.find_last_not_of('0');
+    if (s[pos] == '.') pos--;
+    return s.substr(0, pos + 1);
 }
 
 // ─── Llamada a función ───────────────────────────────────────────
@@ -109,9 +132,46 @@ std::string parsePrimario(bool ejecutar) {
         pos++; return t.valor;
     }
 
+    if (t.tipo == TipoToken::NOT_LOGICO) {
+        pos++;
+        std::string val = parsePrimario(ejecutar);
+        if (!ejecutar) return "falso";
+        return (val == "falso" || val == "0" || val.empty()) ? "verdadero" : "falso";
+    }
+
+    if (t.tipo == TipoToken::RESTA) {
+        pos++;
+        double v = std::stod(parsePrimario(ejecutar));
+        return formatearNumero(-v);
+    }
+
     if (t.tipo == TipoToken::VARIABLE) {
         std::string nombre = t.valor;
         pos++;
+
+        // Incremento/decremento postfijo: nombre++ o nombre--
+        if (esTipo(TipoToken::INCREMENTO)) {
+            pos++;
+            if (ejecutar) {
+                std::string val = tabla.obtener(nombre, t.linea).valor;
+                double d = std::stod(val) + 1.0;
+                tabla.asignar(nombre, formatearNumero(d), t.linea);
+                emitir({TipoEvento::VAR_MODIFICADA, t.linea, nombre, formatearNumero(d)});
+                return formatearNumero(d - 1.0); // post-incremento: devuelve valor anterior
+            }
+            return "0";
+        }
+        if (esTipo(TipoToken::DECREMENTO)) {
+            pos++;
+            if (ejecutar) {
+                std::string val = tabla.obtener(nombre, t.linea).valor;
+                double d = std::stod(val) - 1.0;
+                tabla.asignar(nombre, formatearNumero(d), t.linea);
+                emitir({TipoEvento::VAR_MODIFICADA, t.linea, nombre, formatearNumero(d)});
+                return formatearNumero(d + 1.0); // post-decremento
+            }
+            return "0";
+        }
 
         // Acceso a arreglo: nombre[indice]
         if (esTipo(TipoToken::CORCHETE_IZ)) {
@@ -133,9 +193,7 @@ std::string parsePrimario(bool ejecutar) {
 
         // Variable simple
         if (ejecutar) {
-            // Puede ser arreglo o variable simple
             if (tabla.existeArreglo(nombre)) {
-                // No debería llegar aquí sin corchete, pero lo protegemos
                 return "0";
             }
             std::string val = tabla.obtener(nombre, t.linea).valor;
@@ -152,12 +210,6 @@ std::string parsePrimario(bool ejecutar) {
         return val;
     }
 
-    if (t.tipo == TipoToken::RESTA) {
-        pos++;
-        double v = std::stod(parsePrimario(ejecutar));
-        return std::to_string(-v);
-    }
-
     throw std::runtime_error(error_token_inesperado(t.valor, t.linea));
 }
 
@@ -170,9 +222,9 @@ std::string parseTermino(bool ejecutar) {
         double izq = std::stod(izqStr), der = std::stod(derStr);
         if (op == TipoToken::DIVIDE && der == 0.0)
             throw std::runtime_error(error_division_por_cero(lin));
-        if (op == TipoToken::MULTIPLICA) izqStr = std::to_string(izq * der);
-        else if (op == TipoToken::DIVIDE) izqStr = std::to_string(izq / der);
-        else izqStr = std::to_string(std::fmod(izq, der));
+        if (op == TipoToken::MULTIPLICA) izqStr = formatearNumero(izq * der);
+        else if (op == TipoToken::DIVIDE) izqStr = formatearNumero(izq / der);
+        else izqStr = formatearNumero(std::fmod(izq, der));
     }
     return izqStr;
 }
@@ -184,12 +236,13 @@ std::string parseExpresion(bool ejecutar) {
         std::string derStr = parseTermino(ejecutar);
         if (!ejecutar) continue;
         double izq = std::stod(izqStr), der = std::stod(derStr);
-        izqStr = (op == TipoToken::SUMA) ? std::to_string(izq + der)
-                                         : std::to_string(izq - der);
+        izqStr = (op == TipoToken::SUMA) ? formatearNumero(izq + der)
+                                         : formatearNumero(izq - der);
     }
     return izqStr;
 }
 
+// ─── Condición con operadores lógicos ────────────────────────────
 std::string parseCondicion(bool ejecutar) {
     std::string izqStr = parseExpresion(ejecutar);
     TipoToken op = actual().tipo; pos++;
@@ -212,6 +265,53 @@ std::string parseCondicion(bool ejecutar) {
     return resultado ? "verdadero" : "falso";
 }
 
+// ─── Condición completa con && y || ──────────────────────────────
+// Retorna "verdadero" o "falso"
+bool evaluarCondicionCompleta(bool ejecutar) {
+    bool resultado = false;
+    bool primera = true;
+    TipoToken operador = TipoToken::FIN;
+
+    while (true) {
+        if (!primera) {
+            if (esTipo(TipoToken::AND_LOGICO)) {
+                operador = TipoToken::AND_LOGICO; pos++;
+            } else if (esTipo(TipoToken::OR_LOGICO)) {
+                operador = TipoToken::OR_LOGICO; pos++;
+            } else {
+                break;
+            }
+        }
+
+        std::string val = parseCondicion(ejecutar);
+        bool cmpResult = (val == "verdadero");
+
+        if (primera) {
+            resultado = cmpResult;
+            primera = false;
+        } else if (operador == TipoToken::AND_LOGICO) {
+            resultado = resultado && cmpResult;
+        } else if (operador == TipoToken::OR_LOGICO) {
+            resultado = resultado || cmpResult;
+        }
+
+        // Short-circuit: skip remaining conditions if result is determined
+        if (ejecutar) {
+            if ((operador == TipoToken::AND_LOGICO && !resultado) ||
+                (operador == TipoToken::OR_LOGICO && resultado)) {
+                while (!esTipo(TipoToken::FIN)) {
+                    if (esTipo(TipoToken::PAREN_DE) || esTipo(TipoToken::PUNTO_COMA) ||
+                        esTipo(TipoToken::LLAVE_DE))
+                        break;
+                    pos++;
+                }
+                return resultado;
+            }
+        }
+    }
+    return resultado;
+}
+
 // ─── Declaración de variable simple ──────────────────────────────
 void parseDeclaracion(bool ejecutar) {
     std::string tipoVar = tokenATipoTexto(actual().tipo); pos++;
@@ -227,19 +327,14 @@ void parseDeclaracion(bool ejecutar) {
 }
 
 // ─── Declaración de arreglo ──────────────────────────────────────
-// Sintaxis:  arreglo numero nombre[tamaño];
-// Asignación inicial opcional: arreglo numero nums[3] = {1, 2, 3};
 void parseDeclaracionArreglo(bool ejecutar) {
     int lineaArr = actual().linea;
-    pos++; // consumir 'arreglo'
+    pos++;
 
-    // Tipo de elemento
     std::string tipoElem = tokenATipoTexto(actual().tipo); pos++;
 
-    // Nombre
     Token nombreTok = consumir(TipoToken::VARIABLE);
 
-    // Tamaño entre corchetes
     consumir(TipoToken::CORCHETE_IZ);
     std::string tamStr = parseExpresion(ejecutar);
     consumir(TipoToken::CORCHETE_DE);
@@ -248,9 +343,8 @@ void parseDeclaracionArreglo(bool ejecutar) {
 
     std::vector<std::string> valoresIniciales;
 
-    // Inicialización opcional: = { v1, v2, ... }
     if (esTipo(TipoToken::IGUAL)) {
-        pos++; // consumir '='
+        pos++;
         consumir(TipoToken::LLAVE_IZ);
         while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
             valoresIniciales.push_back(parseExpresion(ejecutar));
@@ -265,14 +359,13 @@ void parseDeclaracionArreglo(bool ejecutar) {
         tabla.declararArreglo(nombreTok.valor, tipoElem, tamano, nombreTok.linea);
         Arreglo& arr = tabla.obtenerArreglo(nombreTok.valor, nombreTok.linea);
 
-        // Aplicar valores iniciales si los hay
         for (int i = 0; i < (int)valoresIniciales.size() && i < tamano; i++) {
             arr.asignar(i, valoresIniciales[i], nombreTok.linea);
         }
 
         emitir({TipoEvento::LINEA_ACTIVA,      lineaArr});
         emitir({TipoEvento::ARREGLO_DECLARADO, lineaArr, nombreTok.valor,
-                std::to_string(tamano), -1, "", arr.celdas});
+                formatearNumero(tamano), -1, "", arr.celdas});
     }
 }
 
@@ -282,9 +375,9 @@ void parseDefinicionFuncion() {
     bool esSubrutinaVacia = esTipo(TipoToken::VACIO);
 
     if (esSubrutinaVacia) {
-        pos++; // consumir 'vacio'
+        pos++;
     } else {
-        pos++; // consumir 'funcion'
+        pos++;
     }
 
     Token nombreFuncTok = consumir(TipoToken::VARIABLE);
@@ -306,7 +399,6 @@ void parseDefinicionFuncion() {
 
     size_t posCuerpo = pos;
 
-    // Saltar el cuerpo contando llaves
     int llavesAbiertas = 0;
     if (esTipo(TipoToken::LLAVE_IZ)) {
         llavesAbiertas++; pos++;
@@ -326,9 +418,44 @@ void parseDefinicionFuncion() {
     tablaFunciones.registrar(nuevaFunc, nombreFuncTok.linea);
 }
 
+// ─── Definición de función con sintaxis nueva: nombre() { ... } ──
+void parseDefinicionFuncionSimple() {
+    Token nombreFuncTok = consumir(TipoToken::VARIABLE);
+    consumir(TipoToken::PAREN_IZ);
+
+    std::vector<std::pair<std::string, std::string>> parametros;
+    while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) {
+        std::string tipoParam = tokenATipoTexto(actual().tipo); pos++;
+        Token nombreParam = consumir(TipoToken::VARIABLE);
+        parametros.push_back({tipoParam, nombreParam.valor});
+        if (esTipo(TipoToken::COMA)) pos++;
+    }
+    consumir(TipoToken::PAREN_DE);
+
+    size_t posCuerpo = pos;
+
+    int llavesAbiertas = 0;
+    if (esTipo(TipoToken::LLAVE_IZ)) {
+        llavesAbiertas++; pos++;
+        while (llavesAbiertas > 0 && !esTipo(TipoToken::FIN)) {
+            if (esTipo(TipoToken::LLAVE_IZ)) llavesAbiertas++;
+            if (esTipo(TipoToken::LLAVE_DE)) llavesAbiertas--;
+            if (llavesAbiertas > 0) pos++;
+        }
+        if (llavesAbiertas > 0)
+            throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
+        consumir(TipoToken::LLAVE_DE);
+    } else {
+        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+    }
+
+    ObjetoFuncion nuevaFunc = {"vacio", nombreFuncTok.valor, parametros, posCuerpo};
+    tablaFunciones.registrar(nuevaFunc, nombreFuncTok.linea);
+}
+
 // ─── Asignación de variable simple ───────────────────────────────
 void parseAsignacion(const Token& varTok, bool ejecutar) {
-    pos++; // consumir '='
+    pos++;
     std::string valor = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) {
@@ -338,9 +465,28 @@ void parseAsignacion(const Token& varTok, bool ejecutar) {
     }
 }
 
-// ─── Asignación a celda de arreglo: nombre[i] = expr ─────────────
+// ─── Asignación compuesta: +=, -=, *= ────────────────────────────
+void parseAsignacionCompuesta(const Token& varTok, TipoToken opToken, bool ejecutar) {
+    pos++;
+    std::string derStr = parseExpresion(ejecutar);
+    consumir(TipoToken::PUNTO_COMA);
+    if (ejecutar) {
+        double izq = std::stod(tabla.obtener(varTok.valor, varTok.linea).valor);
+        double der = std::stod(derStr);
+        double r;
+        if (opToken == TipoToken::MAS_IGUAL) r = izq + der;
+        else if (opToken == TipoToken::MENOS_IGUAL) r = izq - der;
+        else r = izq * der;
+        std::string val = formatearNumero(r);
+        tabla.asignar(varTok.valor, val, varTok.linea);
+        emitir({TipoEvento::LINEA_ACTIVA,   varTok.linea});
+        emitir({TipoEvento::VAR_MODIFICADA, varTok.linea, varTok.valor, val});
+    }
+}
+
+// ─── Asignación a celda de arreglo ───────────────────────────────
 void parseAsignacionArreglo(const Token& varTok, bool ejecutar) {
-    pos++; // consumir '['
+    pos++;
     std::string idxStr = parseExpresion(ejecutar);
     consumir(TipoToken::CORCHETE_DE);
     consumir(TipoToken::IGUAL);
@@ -355,27 +501,57 @@ void parseAsignacionArreglo(const Token& varTok, bool ejecutar) {
     }
 }
 
-// ─── si / sino / fin_si ──────────────────────────────────────────
+// ─── si / sino / sino si / fin_si ────────────────────────────────
 void parseSi(bool ejecutar) {
     int lineaSi = actual().linea;
     pos++; consumir(TipoToken::PAREN_IZ);
-    std::string cond = parseCondicion(ejecutar);
+    bool condBool = evaluarCondicionCompleta(ejecutar);
+    std::string cond = condBool ? "verdadero" : "falso";
     consumir(TipoToken::PAREN_DE);
 
     if (ejecutar)
         emitir({TipoEvento::CONDICION_SI, lineaSi, "", cond});
 
     bool ramaCierta = ejecutar && (cond == "verdadero");
+    bool saltado = false;
 
+    // Cuerpo de la rama si (o sino si)
     while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
         parseSentencia(ramaCierta); if (solicitudRetorno) break;
     }
-    if (esTipo(TipoToken::SINO)) {
-        pos++; bool ramaFalsa = ejecutar && (cond == "falso");
-        while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-            parseSentencia(ramaFalsa); if (solicitudRetorno) break;
+
+    // Manejar cadenas sino / sino si
+    while (esTipo(TipoToken::SINO)) {
+        pos++; // consumir 'sino'
+
+        // sino si (cond) { ... }
+        if (esTipo(TipoToken::SI)) {
+            int lineaSinoSi = actual().linea;
+            pos++; consumir(TipoToken::PAREN_IZ);
+            std::string condSino = parseCondicion(ejecutar);
+            consumir(TipoToken::PAREN_DE);
+
+            if (ejecutar)
+                emitir({TipoEvento::CONDICION_SI, lineaSinoSi, "", condSino});
+
+            bool ramaSinoSi = ejecutar && !saltado && (condSino == "verdadero");
+            if (ramaSinoSi) saltado = true;
+
+            while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+                parseSentencia(ramaSinoSi); if (solicitudRetorno) break;
+            }
+        } else {
+            // sino { ... }
+            bool ramaFalsa = ejecutar && !saltado;
+            saltado = true;
+
+            while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+                parseSentencia(ramaFalsa); if (solicitudRetorno) break;
+            }
+            break;
         }
     }
+
     consumir(TipoToken::FIN_SI);
 }
 
@@ -384,7 +560,8 @@ void parseMientras(bool ejecutar) {
     size_t posMientras = pos; pos++;
     int lineaMientras  = actual().linea;
     consumir(TipoToken::PAREN_IZ);
-    std::string cond = parseCondicion(ejecutar);
+    bool condBool = evaluarCondicionCompleta(ejecutar);
+    std::string cond = condBool ? "verdadero" : "falso";
     consumir(TipoToken::PAREN_DE);
     size_t posCuerpo = pos;
 
@@ -407,18 +584,160 @@ void parseMientras(bool ejecutar) {
 
         pos = posMientras + 1;
         consumir(TipoToken::PAREN_IZ);
-        cond = parseCondicion(true);
+        condBool = evaluarCondicionCompleta(true);
+        cond = condBool ? "verdadero" : "falso";
         consumir(TipoToken::PAREN_DE);
         posCuerpo = pos;
 
         emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
     }
 
-    if (cond == "falso" || solicitudRetorno) {
+    if (!condBool || solicitudRetorno) {
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
     }
     consumir(TipoToken::FIN_MIENTRAS);
     emitir({TipoEvento::BUCLE_FIN, lineaMientras});
+}
+
+// ─── para / fin_para ─────────────────────────────────────────────
+void parsePara(bool ejecutar) {
+    int lineaPara = actual().linea;
+    pos++; consumir(TipoToken::PAREN_IZ);
+
+    // Inicialización: variable = expr  o  tipo variable = expr  o  vacío
+    std::string varInicNombre;
+    std::string varInicValor;
+
+    if (!esTipo(TipoToken::PUNTO_COMA)) {
+        if (esTipoDeclaracion(actual().tipo)) {
+            std::string tipoVar = tokenATipoTexto(actual().tipo); pos++;
+            Token nombreTok = consumir(TipoToken::VARIABLE);
+            varInicNombre = nombreTok.valor;
+            consumir(TipoToken::IGUAL);
+            varInicValor = parseExpresion(ejecutar);
+            if (ejecutar) {
+                tabla.declarar(nombreTok.valor, tipoVar, varInicValor, nombreTok.linea);
+            }
+        } else {
+            Token nombreTok = consumir(TipoToken::VARIABLE);
+            varInicNombre = nombreTok.valor;
+            consumir(TipoToken::IGUAL);
+            varInicValor = parseExpresion(ejecutar);
+            if (ejecutar) {
+                tabla.asignar(nombreTok.valor, varInicValor, nombreTok.linea);
+            }
+        }
+    }
+    if (!esTipo(TipoToken::PUNTO_COMA))
+        throw std::runtime_error(error_falta_token(";", actual().linea));
+    pos++;
+
+    // Condición
+    size_t posCond = pos;
+    if (esTipo(TipoToken::PUNTO_COMA)) {
+        // sin condición → siempre verdadero
+        pos++;
+    } else {
+        pos++; // la condicion será re-evaluada en el bucle
+    }
+    // Saltar hasta el ; de la condición
+    while (!esTipo(TipoToken::PUNTO_COMA) && !esTipo(TipoToken::FIN)) pos++;
+    if (!esTipo(TipoToken::PUNTO_COMA))
+        throw std::runtime_error(error_falta_token(";", actual().linea));
+    pos++;
+
+    // Incremento
+    size_t posInc = pos;
+    while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) pos++;
+    if (!esTipo(TipoToken::PAREN_DE))
+        throw std::runtime_error(error_falta_token(")", actual().linea));
+    pos++;
+
+    size_t posCuerpo = pos;
+
+    if (!ejecutar) {
+        while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN))
+            parseSentencia(false);
+        consumir(TipoToken::FIN_PARA); return;
+    }
+
+    // Evaluar condición una vez
+    size_t posCondEval = posCond;
+    bool condResult = true;
+    int maxIter = 10000;
+
+    while (condResult && maxIter-- > 0) {
+        // Evaluar condición
+        pos = posCondEval;
+        if (esTipo(TipoToken::PUNTO_COMA)) {
+            condResult = true;
+        } else {
+            condResult = evaluarCondicionCompleta(true);
+        }
+        // Ir al ;
+        while (!esTipo(TipoToken::PUNTO_COMA) && !esTipo(TipoToken::FIN)) pos++;
+        if (!esTipo(TipoToken::PUNTO_COMA)) break;
+        pos++;
+
+        // Saltar incremento e ir al cuerpo
+        pos = posInc;
+        while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) pos++;
+        if (!esTipo(TipoToken::PAREN_DE)) break;
+        pos = posCuerpo;
+
+        if (!condResult) break;
+
+        // Cuerpo
+        while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN)) {
+            parseSentencia(true); if (solicitudRetorno) break;
+        }
+        if (solicitudRetorno) break;
+
+        // Incremento (sin ; al final, a diferencia de una sentencia normal)
+        pos = posInc;
+        while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) {
+            Token varTok = actual();
+            if (pos + 1 < tkns->size()) {
+                TipoToken sig = (*tkns)[pos + 1].tipo;
+                if (sig == TipoToken::INCREMENTO) {
+                    pos += 2;
+                    if (ejecutar) {
+                        double d = std::stod(tabla.obtener(varTok.valor, varTok.linea).valor) + 1.0;
+                        tabla.asignar(varTok.valor, formatearNumero(d), varTok.linea);
+                    }
+                } else if (sig == TipoToken::DECREMENTO) {
+                    pos += 2;
+                    if (ejecutar) {
+                        double d = std::stod(tabla.obtener(varTok.valor, varTok.linea).valor) - 1.0;
+                        tabla.asignar(varTok.valor, formatearNumero(d), varTok.linea);
+                    }
+                } else if (sig == TipoToken::MAS_IGUAL || sig == TipoToken::MENOS_IGUAL || sig == TipoToken::POR_IGUAL) {
+                    TipoToken op = sig; pos += 2;
+                    std::string der = parseExpresion(ejecutar);
+                    if (ejecutar) {
+                        double izq = std::stod(tabla.obtener(varTok.valor, varTok.linea).valor);
+                        double dr = std::stod(der);
+                        double r = (op == TipoToken::MAS_IGUAL) ? izq + dr : (op == TipoToken::MENOS_IGUAL) ? izq - dr : izq * dr;
+                        tabla.asignar(varTok.valor, formatearNumero(r), varTok.linea);
+                    }
+                } else if (sig == TipoToken::IGUAL) {
+                    pos += 2;
+                    std::string val = parseExpresion(ejecutar);
+                    if (ejecutar) {
+                        tabla.asignar(varTok.valor, val, varTok.linea);
+                    }
+                } else {
+                    pos++;
+                }
+            } else {
+                pos++;
+            }
+        }
+    }
+
+    while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN)) pos++;
+    consumir(TipoToken::FIN_PARA);
+    emitir({TipoEvento::BUCLE_FIN, lineaPara});
 }
 
 // ─── mostrar ─────────────────────────────────────────────────────
@@ -441,28 +760,97 @@ void parseMostrar(bool ejecutar) {
         emitir({TipoEvento::MOSTRAR_SALIDA, linMostrar, "", val});
 }
 
-// ─── retornar ────────────────────────────────────────────────────
+// ─── leer ────────────────────────────────────────────────────────
+void parseLeer(bool ejecutar) {
+    int linea = actual().linea;
+    pos++;
+    consumir(TipoToken::PAREN_IZ);
+    Token varTok = consumir(TipoToken::VARIABLE);
+    consumir(TipoToken::PAREN_DE);
+    consumir(TipoToken::PUNTO_COMA);
+    if (ejecutar) {
+        emitir({TipoEvento::LEER_SOLICITUD, linea, varTok.valor});
+        std::string input;
+        if (inputHook)
+            input = inputHook();
+        else
+            std::getline(std::cin, input);
+        tabla.asignar(varTok.valor, input, linea);
+        emitir({TipoEvento::VAR_MODIFICADA, linea, varTok.valor, input});
+    }
+}
+
 // ─── Sentencia general ───────────────────────────────────────────
+bool esDefinicionFuncionConRetorno() {
+    if (!esTipoDeclaracion(actual().tipo)) return false;
+    if (pos + 2 >= tkns->size()) return false;
+    if ((*tkns)[pos + 1].tipo != TipoToken::VARIABLE) return false;
+    if ((*tkns)[pos + 2].tipo != TipoToken::PAREN_IZ) return false;
+    size_t tmp = pos + 3;
+    int depth = 1;
+    while (tmp < tkns->size() && depth > 0) {
+        if ((*tkns)[tmp].tipo == TipoToken::PAREN_IZ) depth++;
+        if ((*tkns)[tmp].tipo == TipoToken::PAREN_DE) depth--;
+        if (depth > 0) tmp++;
+    }
+    if (tmp + 1 >= tkns->size()) return false;
+    return (*tkns)[tmp + 1].tipo == TipoToken::LLAVE_IZ;
+}
+
+void parseDefinicionFuncionConRetorno() {
+    std::string tipoRetorno = tokenATipoTexto(actual().tipo); pos++;
+    Token nombreFuncTok = consumir(TipoToken::VARIABLE);
+    consumir(TipoToken::PAREN_IZ);
+
+    std::vector<std::pair<std::string, std::string>> parametros;
+    while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) {
+        std::string tipoParam = tokenATipoTexto(actual().tipo); pos++;
+        Token nombreParam = consumir(TipoToken::VARIABLE);
+        parametros.push_back({tipoParam, nombreParam.valor});
+        if (esTipo(TipoToken::COMA)) pos++;
+    }
+    consumir(TipoToken::PAREN_DE);
+
+    size_t posCuerpo = pos;
+
+    int llavesAbiertas = 0;
+    if (esTipo(TipoToken::LLAVE_IZ)) {
+        llavesAbiertas++; pos++;
+        while (llavesAbiertas > 0 && !esTipo(TipoToken::FIN)) {
+            if (esTipo(TipoToken::LLAVE_IZ)) llavesAbiertas++;
+            if (esTipo(TipoToken::LLAVE_DE)) llavesAbiertas--;
+            if (llavesAbiertas > 0) pos++;
+        }
+        if (llavesAbiertas > 0)
+            throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
+        consumir(TipoToken::LLAVE_DE);
+    } else {
+        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+    }
+
+    ObjetoFuncion nuevaFunc = {tipoRetorno, nombreFuncTok.valor, parametros, posCuerpo};
+    tablaFunciones.registrar(nuevaFunc, nombreFuncTok.linea);
+}
+
 void parseSentencia(bool ejecutar) {
     if (solicitudRetorno) return;
 
     if (esTipo(TipoToken::LLAVE_IZ) || esTipo(TipoToken::LLAVE_DE)) { pos++; return; }
     if (esTipo(TipoToken::MOSTRAR))  { parseMostrar(ejecutar); return; }
 
-    // Declaración de arreglo
     if (esTipo(TipoToken::ARREGLO)) { parseDeclaracionArreglo(ejecutar); return; }
 
-    // Declaración de variable simple
-    if (esTipo(TipoToken::DECLARAR) || esTipo(TipoToken::BOOLEANO) || esTipo(TipoToken::CARACTER)) {
+    if (esTipoDeclaracion(actual().tipo)) {
+        if (esDefinicionFuncionConRetorno()) {
+            parseDefinicionFuncionConRetorno(); return;
+        }
         parseDeclaracion(ejecutar); return;
     }
 
-    // Definición de función o subrutina
     if (esTipo(TipoToken::FUNCION) || esTipo(TipoToken::VACIO)) {
         parseDefinicionFuncion(); return;
     }
 
-    // retornar
     if (esTipo(TipoToken::RETORNAR)) {
         int linRet = actual().linea;
         pos++;
@@ -477,24 +865,63 @@ void parseSentencia(bool ejecutar) {
         return;
     }
 
+    if (esTipo(TipoToken::LEER))     { parseLeer(ejecutar);    return; }
     if (esTipo(TipoToken::SI))       { parseSi(ejecutar);      return; }
     if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar); return; }
+    if (esTipo(TipoToken::PARA))     { parsePara(ejecutar);    return; }
 
     if (esTipo(TipoToken::VARIABLE)) {
         Token varTok = actual();
 
-        // Asignación a arreglo: nombre[i] = expr
         if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::CORCHETE_IZ) {
             pos++; parseAsignacionArreglo(varTok, ejecutar); return;
         }
-        // Llamada a función como sentencia: nombre(...)
         if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::PAREN_IZ) {
+            // Mirar si después de (...) viene { → definición de función
+            size_t tmp = pos + 2;
+            int depth = 1;
+            while (tmp < tkns->size() && depth > 0) {
+                if ((*tkns)[tmp].tipo == TipoToken::PAREN_IZ) depth++;
+                if ((*tkns)[tmp].tipo == TipoToken::PAREN_DE) depth--;
+                if (depth > 0) tmp++;
+            }
+            bool esDefinicion = (tmp + 1 < tkns->size() && (*tkns)[tmp + 1].tipo == TipoToken::LLAVE_IZ);
+            if (esDefinicion) {
+                parseDefinicionFuncionSimple(); return;
+            }
             pos++; ejecutarLlamadaFuncion(varTok.valor, ejecutar);
             consumir(TipoToken::PUNTO_COMA); return;
         }
-        // Asignación simple: nombre = expr
         if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::IGUAL) {
             pos++; parseAsignacion(varTok, ejecutar); return;
+        }
+        // Asignación compuesta
+        if (pos + 1 < tkns->size()) {
+            TipoToken sig = (*tkns)[pos + 1].tipo;
+            if (sig == TipoToken::MAS_IGUAL || sig == TipoToken::MENOS_IGUAL || sig == TipoToken::POR_IGUAL) {
+                pos++; parseAsignacionCompuesta(varTok, sig, ejecutar); return;
+            }
+        }
+        // Incremento/decremento como sentencia
+        if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::INCREMENTO) {
+            pos += 2;
+            if (ejecutar) {
+                std::string v = tabla.obtener(varTok.valor, varTok.linea).valor;
+                double d = std::stod(v) + 1.0;
+                tabla.asignar(varTok.valor, formatearNumero(d), varTok.linea);
+                emitir({TipoEvento::VAR_MODIFICADA, varTok.linea, varTok.valor, formatearNumero(d)});
+            }
+            consumir(TipoToken::PUNTO_COMA); return;
+        }
+        if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::DECREMENTO) {
+            pos += 2;
+            if (ejecutar) {
+                std::string v = tabla.obtener(varTok.valor, varTok.linea).valor;
+                double d = std::stod(v) - 1.0;
+                tabla.asignar(varTok.valor, formatearNumero(d), varTok.linea);
+                emitir({TipoEvento::VAR_MODIFICADA, varTok.linea, varTok.valor, formatearNumero(d)});
+            }
+            consumir(TipoToken::PUNTO_COMA); return;
         }
     }
 
@@ -503,8 +930,6 @@ void parseSentencia(bool ejecutar) {
 }
 
 // ─── Punto de entrada principal ──────────────────────────────────
-// cola == nullptr → modo consola (comportamiento original)
-// cola != nullptr → modo GUI, llena la cola sin animar nada en tiempo real
 double parsear(std::vector<Token>& tokens, std::vector<EventoPaso>* cola) {
     pos              = 0;
     tkns             = &tokens;
@@ -513,12 +938,12 @@ double parsear(std::vector<Token>& tokens, std::vector<EventoPaso>* cola) {
     solicitudRetorno = false;
     colaEventos      = cola;
 
-    // Fase 1: Registrar funciones globales (ejecutar = false)
+    // Fase 1: Registrar funciones y variables globales
     while (!esTipo(TipoToken::FIN))
-        parseSentencia(false);
+        parseSentencia(true);
 
-    // Fase 2: Ejecutar 'principal' si existe
-    if (tablaFunciones.existe("principal")) {
+    // Fase 2: Ejecutar 'Principal' si existe
+    if (tablaFunciones.existe("Principal")) {
         size_t tokenFinal = pos;
 
         Token tokParenIz; tokParenIz.tipo = TipoToken::PAREN_IZ; tokParenIz.valor = "("; tokParenIz.linea = 0;
@@ -526,13 +951,13 @@ double parsear(std::vector<Token>& tokens, std::vector<EventoPaso>* cola) {
         tokens.insert(tokens.begin() + (long)tokenFinal, tokParenDe);
         tokens.insert(tokens.begin() + (long)tokenFinal, tokParenIz);
 
-        ejecutarLlamadaFuncion("principal", true);
+        ejecutarLlamadaFuncion("Principal", true);
 
         tokens.erase(tokens.begin() + (long)tokenFinal,
                      tokens.begin() + (long)tokenFinal + 2);
         pos = tokenFinal;
     } else {
-        std::cout << "[INFO]: No se encontró la rutina 'principal()'. El programa finalizó de forma secuencial.\n";
+        std::cout << "[INFO]: No se encontró la rutina 'Principal()'. El programa finalizó de forma secuencial.\n";
     }
 
     tabla.revisarGlobalesNoUsadas();

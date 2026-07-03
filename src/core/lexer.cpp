@@ -2,11 +2,13 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
-#include "lexer.hpp"
-#include "errors.hpp"
+#include "core/lexer.hpp"
+#include "core/errors.hpp"
 
 static TipoToken palabraReservada(const std::string& palabra) {
-    if (palabra == "numero")        return TipoToken::DECLARAR;
+    if (palabra == "entero")        return TipoToken::ENTERO;
+    if (palabra == "decimal")       return TipoToken::DECIMAL;
+    if (palabra == "cadena")        return TipoToken::TIPO_CADENA;
     if (palabra == "booleano")      return TipoToken::BOOLEANO;
     if (palabra == "caracter")      return TipoToken::CARACTER;
     if (palabra == "vacio")         return TipoToken::VACIO;
@@ -18,6 +20,8 @@ static TipoToken palabraReservada(const std::string& palabra) {
     if (palabra == "fin_si")        return TipoToken::FIN_SI;
     if (palabra == "mientras")      return TipoToken::MIENTRAS;
     if (palabra == "fin_mientras")  return TipoToken::FIN_MIENTRAS;
+    if (palabra == "para")          return TipoToken::PARA;
+    if (palabra == "fin_para")      return TipoToken::FIN_PARA;
     if (palabra == "mostrar")       return TipoToken::MOSTRAR;
     if (palabra == "leer")          return TipoToken::LEER;
     if (palabra == "verdadero" || palabra == "falso") return TipoToken::LITERAL_BOOLEANO;
@@ -99,7 +103,32 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             continue;
         }
 
-        // Operadores dobles
+        // Operadores de dos caracteres (orden importa: ++ antes que +, etc.)
+        if (c == '+' && i + 1 < fuente.size() && fuente[i + 1] == '+') {
+            tokens.push_back({TipoToken::INCREMENTO, "++", linea}); i += 2; continue;
+        }
+        if (c == '+' && i + 1 < fuente.size() && fuente[i + 1] == '=') {
+            tokens.push_back({TipoToken::MAS_IGUAL, "+=", linea}); i += 2; continue;
+        }
+        if (c == '-' && i + 1 < fuente.size() && fuente[i + 1] == '-') {
+            tokens.push_back({TipoToken::DECREMENTO, "--", linea}); i += 2; continue;
+        }
+        if (c == '-' && i + 1 < fuente.size() && fuente[i + 1] == '=') {
+            tokens.push_back({TipoToken::MENOS_IGUAL, "-=", linea}); i += 2; continue;
+        }
+        if (c == '*' && i + 1 < fuente.size() && fuente[i + 1] == '=') {
+            tokens.push_back({TipoToken::POR_IGUAL, "*=", linea}); i += 2; continue;
+        }
+
+        // Operadores lógicos
+        if (c == '&' && i + 1 < fuente.size() && fuente[i + 1] == '&') {
+            tokens.push_back({TipoToken::AND_LOGICO, "&&", linea}); i += 2; continue;
+        }
+        if (c == '|' && i + 1 < fuente.size() && fuente[i + 1] == '|') {
+            tokens.push_back({TipoToken::OR_LOGICO, "||", linea}); i += 2; continue;
+        }
+
+        // Operadores de comparación
         if (c == '=') {
             if (i + 1 < fuente.size() && fuente[i + 1] == '=') {
                 tokens.push_back({TipoToken::IGUAL_IGUAL, "==", linea}); i += 2;
@@ -110,6 +139,9 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         }
         if (c == '!' && i + 1 < fuente.size() && fuente[i + 1] == '=') {
             tokens.push_back({TipoToken::DIFERENTE, "!=", linea}); i += 2; continue;
+        }
+        if (c == '!') {
+            tokens.push_back({TipoToken::NOT_LOGICO, "!", linea}); i++; continue;
         }
         if (c == '<') {
             if (i + 1 < fuente.size() && fuente[i + 1] == '=') { tokens.push_back({TipoToken::MENOR_IGUAL, "<=", linea}); i += 2; }

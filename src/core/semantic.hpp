@@ -4,8 +4,8 @@
 #include <vector>
 #include <stdexcept>
 #include <iostream>
-#include "errors.hpp"
-#include "lexer.hpp"
+#include "core/errors.hpp"
+#include "core/lexer.hpp"
 
 // ─── Variable simple ─────────────────────────────────────────────
 struct Variable {
