@@ -1,0 +1,18 @@
+
+#incluir "matematica.txt"
+
+Principal() {
+    mostrar("Hola Mundo");
+    
+    entero edad = 18;
+    decimal altura = 1.75;
+    booleano activo = verdadero;
+    caracter inicial = 'R';
+    cadena nombre = "Juan";
+    
+    para(entero i = 0; i < 5; i++){
+        mostrar(i);
+    }
+fin_para
+
+}

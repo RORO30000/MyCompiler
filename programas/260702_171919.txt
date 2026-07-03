@@ -1,0 +1,6 @@
+vacio principal() {
+    numero x = 5;
+    si (x > 3) {
+        mostrar("hola");
+    fin_si
+}
