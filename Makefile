@@ -1,6 +1,6 @@
 # ── Configuración del Compilador ─────────────────────────────────────────────
 CXX      = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -fPIC
+CXXFLAGS = -std=c++17 -Wall -Wextra -fPIC -Isrc
 
 # ── Detección Automática de Qt (Soporta Qt6 o Qt5) ───────────────────────────
 QT_VERSION := $(shell pkg-config --exists Qt6Widgets && echo Qt6 || echo Qt5)
@@ -23,12 +23,14 @@ endif
 # ── Nombre del Ejecutable Final ──────────────────────────────────────────────
 TARGET   = ide_grafico
 
-# ── Archivos Fuente del Proyecto ─────────────────────────────────────────────
-SRCS     = main_gui.cpp VentanaPrincipal.cpp lexer.cpp parser.cpp preprocesador.cpp
+# ── Archivos Fuente del Proyecto (rutas relativas) ───────────────────────────
+SRCS     = src/main_gui.cpp src/gui/VentanaPrincipal.cpp \
+           src/core/lexer.cpp src/core/parser.cpp src/core/preprocesador.cpp
 OBJS     = $(SRCS:.cpp=.o) moc_VentanaPrincipal.o
 
-# ── Cabeceras compartidas (cualquier cambio fuerza recompilación) ─────────────
-HEADERS  = lexer.hpp semantic.hpp errors.hpp eventos.hpp VentanaPrincipal.hpp
+# ── Cabeceras compartidas (con ruta relativa a src/) ─────────────────────────
+HEADERS  = src/core/lexer.hpp src/core/semantic.hpp src/core/errors.hpp \
+           src/core/eventos.hpp src/gui/VentanaPrincipal.hpp
 
 # ── Regla Principal: Compila Todo ────────────────────────────────────────────
 all: $(TARGET)
@@ -41,21 +43,24 @@ $(TARGET): $(OBJS)
 
 # ── Reglas de Compilación Independientes ─────────────────────────────────────
 
-VentanaPrincipal.o: VentanaPrincipal.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c VentanaPrincipal.cpp -o VentanaPrincipal.o
+src/gui/VentanaPrincipal.o: src/gui/VentanaPrincipal.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c src/gui/VentanaPrincipal.cpp \
+	        -o src/gui/VentanaPrincipal.o
 
-main_gui.o: main_gui.cpp VentanaPrincipal.hpp
-	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c main_gui.cpp -o main_gui.o
+src/main_gui.o: src/main_gui.cpp src/gui/VentanaPrincipal.hpp
+	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c src/main_gui.cpp -o src/main_gui.o
 
 moc_VentanaPrincipal.o: moc_VentanaPrincipal.cpp
-	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c moc_VentanaPrincipal.cpp -o moc_VentanaPrincipal.o
+	$(CXX) $(CXXFLAGS) $(QT_CFLAGS) -c moc_VentanaPrincipal.cpp \
+	        -o moc_VentanaPrincipal.o
 
 %.o: %.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # ── Generador MOC Adaptativo ─────────────────────────────────────────────────
-moc_VentanaPrincipal.cpp: VentanaPrincipal.hpp eventos.hpp
-	$(MOC_ENV) $(MOC_BIN) VentanaPrincipal.hpp -o moc_VentanaPrincipal.cpp
+moc_VentanaPrincipal.cpp: src/gui/VentanaPrincipal.hpp src/core/eventos.hpp
+	$(MOC_ENV) $(MOC_BIN) src/gui/VentanaPrincipal.hpp \
+	           -o moc_VentanaPrincipal.cpp
 
 # ── Ejecutar la Aplicación ───────────────────────────────────────────────────
 run: $(TARGET)
@@ -69,7 +74,7 @@ go: all run
 # ── Limpieza del Proyecto ────────────────────────────────────────────────────
 clean:
 	rm -f $(OBJS) $(TARGET) moc_VentanaPrincipal.cpp moc_VentanaPrincipal.o
-	rm -f compilador main.o
+	rm -f src/main.o src/core/main.o
 	@echo "Limpieza lista. Todos los binarios y archivos temporales eliminados."
 
 .PHONY: all run go clean
