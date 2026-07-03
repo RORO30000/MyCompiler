@@ -1,6 +1,6 @@
-#include "VentanaPrincipal.hpp"
-#include "lexer.hpp"
-#include "eventos.hpp"
+#include "gui/VentanaPrincipal.hpp"
+#include "core/lexer.hpp"
+#include "core/eventos.hpp"
 #include <vector>
 #include <sstream>
 #include <iostream>
@@ -14,11 +14,21 @@
 #include <QStatusBar>
 #include <QTextBlock>
 #include <QComboBox>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QFileDialog>
+#include <QFile>
+#include <QDir>
+#include <QProcess>
+#include <QMessageBox>
+#include <QDateTime>
+#include <QApplication>
 
 // ── Prototipos externos ───────────────────────────────────────────
 std::vector<Token>  tokenizar(const std::string&);
 double              parsear(std::vector<Token>&, std::vector<EventoPaso>* = nullptr);
 std::string         preprocesarBibliotecas(const std::string&);
+void                setInputHook(std::string (*hook)());
 
 // ═════════════════════════════════════════════════════════════════
 //  Paleta de colores centralizada
@@ -26,7 +36,6 @@ std::string         preprocesarBibliotecas(const std::string&);
 namespace Pal {
     static const char* BG_APP      = "#1e1e1e";
     static const char* BG_EDITOR   = "#1e1e1e";
-    static const char* BG_CONSOLE  = "#181818";
     static const char* BG_PANEL    = "#252526";
     static const char* BG_GUTTER   = "#2d2d30";
     static const char* BG_MENUBAR  = "#2d2d30";
@@ -41,7 +50,6 @@ namespace Pal {
 
     static const char* TXT_MAIN = "#d4d4d4";
     static const char* TXT_DIM  = "#9ca3af";
-    static const char* TXT_OK   = "#86efac";
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -145,6 +153,84 @@ void CodeEditor::scrollContentsBy(int dx, int dy) {
     _gutter->update();
 }
 
+void CodeEditor::keyPressEvent(QKeyEvent* ev) {
+    if (ev->key() == Qt::Key_Tab) {
+        insertPlainText("    ");
+        return;
+    }
+
+    if (ev->key() == Qt::Key_Return || ev->key() == Qt::Key_Enter) {
+        QTextCursor cur = textCursor();
+        int cursorPos = cur.position();
+
+        QTextCursor lineCur = cur;
+        lineCur.movePosition(QTextCursor::StartOfLine);
+        int lineStart = lineCur.position();
+        lineCur.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
+        QString fullLine = lineCur.selectedText();
+
+        int indent = 0, wsLen = 0;
+        for (int i = 0; i < fullLine.length(); i++) {
+            if (fullLine[i] == ' ') { indent++; wsLen++; }
+            else if (fullLine[i] == '\t') { indent += 4; wsLen++; }
+            else break;
+        }
+
+        QString trimmed = fullLine.trimmed();
+
+        int curIndent = indent;
+        if (trimmed.startsWith("fin_") || trimmed == "sino" || trimmed.startsWith("}"))
+            curIndent = qMax(0, indent - 4);
+
+        int newIndent = curIndent;
+        if (trimmed.endsWith("{"))
+            newIndent = curIndent + 4;
+
+        if (curIndent != indent && !trimmed.isEmpty()) {
+            QTextCursor fix = cur;
+            fix.setPosition(lineStart);
+            fix.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, wsLen);
+            fix.removeSelectedText();
+            fix.insertText(QString(curIndent, ' '));
+            cursorPos = cursorPos - wsLen + curIndent;
+            cur.setPosition(cursorPos);
+            setTextCursor(cur);
+        }
+
+        QTextEdit::keyPressEvent(ev);
+
+        if (newIndent > 0)
+            insertPlainText(QString(newIndent, ' '));
+        return;
+    }
+
+    QTextEdit::keyPressEvent(ev);
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  Auto-indentado global
+// ═════════════════════════════════════════════════════════════════
+static QString autoIndentar(const QString& codigo) {
+    QStringList lineas = codigo.split('\n');
+    QString resultado;
+    int indent = 0;
+    const int INC = 4;
+
+    for (int i = 0; i < lineas.size(); i++) {
+        QString trimmed = lineas[i].trimmed();
+
+        if (trimmed.startsWith("fin_") || trimmed == "sino" || trimmed.startsWith("}"))
+            indent = qMax(0, indent - INC);
+
+        resultado += QString(indent, ' ') + trimmed;
+        if (i < lineas.size() - 1) resultado += '\n';
+
+        if (trimmed.endsWith("{"))
+            indent += INC;
+    }
+    return resultado;
+}
+
 // ═════════════════════════════════════════════════════════════════
 //  VentanaPrincipal — constructor
 // ═════════════════════════════════════════════════════════════════
@@ -155,7 +241,7 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     setStyleSheet(QString("QMainWindow { background:%1; }").arg(Pal::BG_APP));
 
 
-    // ── Barra de menú (decorativa, sin acción aún) ────────────────
+    // ── Barra de menú ─────────────────────────────────────────────
     QMenuBar* mb = menuBar();
     mb->setStyleSheet(
         QString("QMenuBar { background:%1; color:%2; font-size:12px;"
@@ -171,21 +257,26 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     QMenu* mVista   = mb->addMenu("Vista");
     QMenu* mAyuda   = mb->addMenu("Ayuda");
 
-    // acciones placeholder
-    mArchivo->addAction("Nuevo");
-    mArchivo->addAction("Abrir...");
-    mArchivo->addAction("Guardar");
+    QAction* actNuevo  = mArchivo->addAction("Nuevo");
+    QAction* actAbrir  = mArchivo->addAction("Abrir...");
+    QAction* actGuard  = mArchivo->addAction("Guardar");
+    QAction* actGuardC = mArchivo->addAction("Guardar como...");
     mArchivo->addSeparator();
-    mArchivo->addAction("Salir");
-    mEditar->addAction("Deshacer");
-    mEditar->addAction("Rehacer");
+    QAction* actSalir  = mArchivo->addAction("Salir");
+    connect(actNuevo,  &QAction::triggered, this, &VentanaPrincipal::nuevoArchivo);
+    connect(actAbrir,  &QAction::triggered, this, &VentanaPrincipal::abrirArchivo);
+    connect(actGuard,  &QAction::triggered, this, &VentanaPrincipal::guardarArchivo);
+    connect(actGuardC, &QAction::triggered, this, &VentanaPrincipal::guardarComoArchivo);
+    connect(actSalir,  &QAction::triggered, this, &VentanaPrincipal::salirAplicacion);
+    mEditar->addAction("Deshacer")->setEnabled(false);
+    mEditar->addAction("Rehacer")->setEnabled(false);
     mEditar->addSeparator();
-    mEditar->addAction("Copiar");
-    mEditar->addAction("Pegar");
-    mVista->addAction("Tema oscuro");
-    mVista->addAction("Aumentar fuente");
-    mVista->addAction("Reducir fuente");
-    mAyuda->addAction("Acerca de MyCompiler");
+    mEditar->addAction("Copiar")->setEnabled(false);
+    mEditar->addAction("Pegar")->setEnabled(false);
+    mVista->addAction("Tema oscuro")->setEnabled(false);
+    mVista->addAction("Aumentar fuente")->setEnabled(false);
+    mVista->addAction("Reducir fuente")->setEnabled(false);
+    mAyuda->addAction("Acerca de MyCompiler")->setEnabled(false);
 
     // ── Barra de estado ───────────────────────────────────────────
     statusBar()->setStyleSheet(
@@ -206,19 +297,6 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
         .arg(Pal::BG_EDITOR, Pal::TXT_MAIN)
     );
 
-    // ── Consola de salida ─────────────────────────────────────────
-    consolaSalida = new QTextEdit(this);
-    consolaSalida->setReadOnly(true);
-    consolaSalida->setFixedHeight(120);
-    QFont fc("Courier New", 10);
-    consolaSalida->setFont(fc);
-    consolaSalida->setStyleSheet(
-        QString("QTextEdit { background:%1; color:%2;"
-                "border:none; border-top:1px solid #333; padding:4px; }")
-        .arg(Pal::BG_CONSOLE, Pal::TXT_OK)
-    );
-    consolaSalida->setPlaceholderText("Salida del programa...");
-
     // ── Botones ───────────────────────────────────────────────────
     botonEjecutar  = makeBtn("▶  Compilar",  Pal::ACCENT_BLUE,  Pal::H_BLUE,  this);
     botonAnterior  = makeBtn("◀  Anterior",  Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
@@ -228,13 +306,18 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     comboPlantillas = new QComboBox(this);
 
     comboPlantillas->addItem("Plantillas...");
-    comboPlantillas->addItem("Nuevo archivo");
-    comboPlantillas->addItem("Hola Mundo");
+    comboPlantillas->addItem("Principal");
+    comboPlantillas->addItem("#incluir");
     comboPlantillas->addItem("Variables");
     comboPlantillas->addItem("Si");
+    comboPlantillas->addItem("Sino si");
     comboPlantillas->addItem("Mientras");
+    comboPlantillas->addItem("Para");
     comboPlantillas->addItem("Funcion");
     comboPlantillas->addItem("Arreglo");
+    comboPlantillas->addItem("Op. compuestos");
+    comboPlantillas->addItem("Incr/Decr");
+    comboPlantillas->addItem("Logicos");
 
     botonSiguiente->setEnabled(false);
     botonAnterior->setEnabled(false);
@@ -359,14 +442,13 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     splitter->setStyleSheet(
         "QSplitter::handle { background:#333; }");
 
-    // lado izquierdo: editor arriba, consola abajo
+    // lado izquierdo: solo editor
     QWidget* ladoIzq = new QWidget();
     ladoIzq->setStyleSheet("background:transparent;");
     QVBoxLayout* layIzq = new QVBoxLayout(ladoIzq);
     layIzq->setContentsMargins(0,0,0,0);
     layIzq->setSpacing(0);
-    layIzq->addWidget(editorCodigo, 1);   // se expande
-    layIzq->addWidget(consolaSalida, 0);  // altura fija
+    layIzq->addWidget(editorCodigo, 1);
 
     splitter->addWidget(ladoIzq);
     splitter->addWidget(panelAnimacion);
@@ -383,39 +465,214 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
         this,
         &VentanaPrincipal::cargarPlantilla);
 }
-    void VentanaPrincipal::cargarPlantilla(const QString& nombre)
+
+// ═════════════════════════════════════════════════════════════════
+//  Terminal emergente
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::mostrarTerminal(const std::string& contenido) {
+    auto* term = new QDialog(this);
+    term->setWindowTitle("Terminal — MyCompiler");
+    term->resize(720, 420);
+    term->setAttribute(Qt::WA_DeleteOnClose);
+
+    auto* lay = new QVBoxLayout(term);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(0);
+
+    auto* output = new QTextEdit(term);
+    output->setReadOnly(true);
+    QFont f("Courier New", 11);
+    f.setStyleHint(QFont::TypeWriter);
+    output->setFont(f);
+    output->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    output->setStyleSheet(
+        "QTextEdit {"
+        "  background:#0d1117; color:#e6edf3;"
+        "  border:none; padding:12px;"
+        "  selection-background-color:#264f78;"
+        "}"
+        "QScrollBar:vertical {"
+        "  background:#0d1117; width:10px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "  background:#30363d; border-radius:5px; min-height:20px;"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "  height:0;"
+        "}"
+    );
+    output->setHtml(
+        QString("<pre style='font-family:\"Courier New\",monospace;"
+                "margin:0; white-space:pre-wrap; color:#e6edf3;'>%1</pre>")
+        .arg(QString::fromStdString(contenido))
+    );
+
+    auto* barra = new QWidget(term);
+    barra->setFixedHeight(36);
+    barra->setStyleSheet("background:#161b22; border-top:1px solid #30363d;");
+    auto* layBarra = new QHBoxLayout(barra);
+    layBarra->setContentsMargins(8, 4, 8, 4);
+
+    auto* btnCerrar = new QPushButton("Cerrar", barra);
+    btnCerrar->setFixedHeight(26);
+    btnCerrar->setCursor(Qt::PointingHandCursor);
+    btnCerrar->setStyleSheet(
+        "QPushButton {"
+        "  background:#238636; color:#fff; font-weight:600; font-size:12px;"
+        "  border:none; border-radius:4px; padding:0 18px;"
+        "}"
+        "QPushButton:hover { background:#2ea043; }"
+    );
+    connect(btnCerrar, &QPushButton::clicked, term, &QDialog::close);
+
+    layBarra->addStretch();
+    layBarra->addWidget(btnCerrar);
+
+    lay->addWidget(output, 1);
+    lay->addWidget(barra, 0);
+
+    term->show();
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  Acciones de Archivo
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::nuevoArchivo() {
+    editorCodigo->clear();
+    rutaActual.clear();
+    statusBar()->showMessage("Nuevo archivo");
+}
+
+void VentanaPrincipal::abrirArchivo() {
+    QString ruta = QFileDialog::getOpenFileName(this, "Abrir código",
+        "programas", "Archivos de código (*.txt)");
+    if (ruta.isEmpty()) return;
+
+    QFile f(ruta);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Error", "No se pudo abrir el archivo.");
+        return;
+    }
+
+    QString codigo = autoIndentar(QString::fromUtf8(f.readAll()));
+    f.close();
+
+    editorCodigo->setPlainText(codigo);
+    rutaActual = ruta;
+    statusBar()->showMessage("Abierto: " + ruta);
+}
+
+void VentanaPrincipal::guardarArchivo() {
+    if (!rutaActual.isEmpty()) {
+        QFile f(rutaActual);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QString codigo = autoIndentar(editorCodigo->toPlainText());
+            f.write(codigo.toUtf8());
+            f.close();
+            statusBar()->showMessage("Guardado: " + rutaActual);
+            return;
+        }
+    }
+    QDir().mkpath("programas");
+    QString nombre = QDateTime::currentDateTime().toString("yyMMdd_HHmmss") + ".txt";
+    rutaActual = QDir("programas").absoluteFilePath(nombre);
+    QFile f(rutaActual);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QString codigo = autoIndentar(editorCodigo->toPlainText());
+        f.write(codigo.toUtf8());
+        f.close();
+        statusBar()->showMessage("Guardado: " + rutaActual);
+    }
+}
+
+void VentanaPrincipal::guardarComoArchivo() {
+    QDir().mkpath("programas");
+
+    QString ruta = QFileDialog::getSaveFileName(this, "Guardar como",
+        "programas/", "Archivos de código (*.txt)");
+    if (ruta.isEmpty()) return;
+
+    QFile f(ruta);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Error", "No se pudo guardar el archivo.");
+        return;
+    }
+
+    QString codigo = autoIndentar(editorCodigo->toPlainText());
+    f.write(codigo.toUtf8());
+    f.close();
+
+    rutaActual = ruta;
+    statusBar()->showMessage("Guardado: " + ruta);
+}
+
+void VentanaPrincipal::closeEvent(QCloseEvent* ev) {
+    QProcess::startDetached("make", QStringList{"clean"});
+    QMainWindow::closeEvent(ev);
+}
+
+void VentanaPrincipal::salirAplicacion() {
+    close();
+}
+
+void VentanaPrincipal::cargarPlantilla(const QString& nombre)
     {
         if(nombre == "Plantillas...")
             return;
 
-        if(nombre == "Nuevo archivo")
+        if(nombre == "Principal")
         {
             editorCodigo->clear();
+            QString texto =
+                "\nPrincipal() {\n"
+                "    mostrar(\"Hola Mundo\");\n"
+                "}\n";
+            QTextCursor cursor = editorCodigo->textCursor();
+            cursor.insertText(texto);
             comboPlantillas->setCurrentIndex(0);
             return;
         }
 
         QString codigo;
 
-        if(nombre == "Hola Mundo")
+        if(nombre == "#incluir")
         {
             codigo =
-                "\nmostrar(\"Hola Mundo\");\n";
+                "\n#incluir \"matematica.txt\"\n";
         }
 
         else if(nombre == "Variables")
         {
             codigo =
-                "\nnumero edad = 18;\n"
+                "\nentero edad = 18;\n"
+                "decimal altura = 1.75;\n"
                 "booleano activo = verdadero;\n"
-                "caracter inicial = 'R';\n";
+                "caracter inicial = 'R';\n"
+                "cadena nombre = \"Juan\";\n";
         }
 
         else if(nombre == "Si")
         {
             codigo =
-                "\nsi(edad >= 18){\n"
+                "\nentero edad = 18;\n"
+                "si(edad >= 18){\n"
                 "    mostrar(\"Mayor de edad\");\n"
+                "} sino {\n"
+                "    mostrar(\"Menor de edad\");\n"
+                "}\n"
+                "fin_si\n";
+        }
+
+        else if(nombre == "Sino si")
+        {
+            codigo =
+                "\nentero nota = 85;\n"
+                "si(nota >= 90){\n"
+                "    mostrar(\"Sobresaliente\");\n"
+                "} sino si(nota >= 70){\n"
+                "    mostrar(\"Aprobado\");\n"
+                "} sino {\n"
+                "    mostrar(\"Reprobado\");\n"
                 "}\n"
                 "fin_si\n";
         }
@@ -423,19 +680,27 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
         else if(nombre == "Mientras")
         {
             codigo =
-                "\nnumero contador = 0;\n"
-                "\n"
-                "mientras(contador < 10){\n"
-                "    mostrar(contador);\n"
-                "    contador = contador + 1;\n"
+                "\nentero i = 0;\n"
+                "mientras(i < 5){\n"
+                "    mostrar(i);\n"
+                "    i++;\n"
                 "}\n"
                 "fin_mientras\n";
+        }
+
+        else if(nombre == "Para")
+        {
+            codigo =
+                "\npara(entero i = 0; i < 5; i++){\n"
+                "    mostrar(i);\n"
+                "}\n"
+                "fin_para\n";
         }
 
         else if(nombre == "Funcion")
         {
             codigo =
-                "\nfuncion numero sumar(numero a, numero b){\n"
+                "\nentero sumar(entero a, entero b){\n"
                 "    retornar a + b;\n"
                 "}\n";
         }
@@ -443,7 +708,44 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
         else if(nombre == "Arreglo")
         {
             codigo =
-                "\narreglo numeros[5];\n";
+                "\narreglo entero numeros[5];\n"
+                "numeros[0] = 10;\n"
+                "mostrar(numeros[0]);\n";
+        }
+
+        else if(nombre == "Op. compuestos")
+        {
+            codigo =
+                "\nentero x = 10;\n"
+                "x += 5;\n"
+                "x -= 3;\n"
+                "x *= 2;\n"
+                "mostrar(x);\n";
+        }
+
+        else if(nombre == "Incr/Decr")
+        {
+            codigo =
+                "\nentero c = 0;\n"
+                "c++;\n"
+                "mostrar(c);\n"
+                "c--;\n"
+                "mostrar(c);\n";
+        }
+
+        else if(nombre == "Logicos")
+        {
+            codigo =
+                "\nentero a = 5;\n"
+                "entero b = 10;\n"
+                "si(a > 0 && b > 0){\n"
+                "    mostrar(\"ambos positivos\");\n"
+                "}\n"
+                "si(!(a == b)){\n"
+                "    mostrar(\"son diferentes\");\n"
+                "}\n"
+                "fin_si\n"
+                "fin_si\n";
         }
 
         QTextCursor cursor = editorCodigo->textCursor();
@@ -453,13 +755,6 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     }
 
 void VentanaPrincipal::manejarEjecucion() {
-    consolaSalida->clear();
-    consolaSalida->setStyleSheet(
-        QString("QTextEdit { background:%1; color:%2;"
-                "border:none; border-top:1px solid #333; padding:4px; }")
-        .arg(Pal::BG_CONSOLE, Pal::TXT_OK));
-    consolaSalida->append("<span style='color:#6b7280;'>Compilando...</span>");
-
     pasos.clear();
     historial.clear();
     pasoActual = 0;
@@ -474,37 +769,46 @@ void VentanaPrincipal::manejarEjecucion() {
     std::stringstream buf;
     std::streambuf* old = std::cout.rdbuf(buf.rdbuf());
 
+    QString html;
+
+    setInputHook([]() -> std::string {
+        bool ok;
+        QString r = QInputDialog::getText(nullptr, "Entrada requerida",
+            "Ingresa un valor:", QLineEdit::Normal, "", &ok);
+        return ok ? r.toStdString() : "0";
+    });
+
     try {
         std::string expanded = preprocesarBibliotecas(src);
         auto tokens = tokenizar(expanded);
         parsear(tokens, &pasos);
+        setInputHook(nullptr);
         std::cout.rdbuf(old);
 
         QString salida = QString::fromStdString(buf.str()).toHtmlEscaped()
                             .replace("\n","<br>");
-        if (!salida.isEmpty())
-            consolaSalida->append(salida);
+        html += salida;
 
-        consolaSalida->append(
-            QString("<span style='color:#22c55e;'>✓ %1 pasos generados."
-                    " Presiona Siguiente para animar.</span>")
-            .arg(pasos.size()));
+        html += QString("<br><span style='color:#22c55e;'>✓ %1 pasos generados."
+                        " Presiona Siguiente para animar.</span>")
+                .arg(pasos.size());
         statusBar()->showMessage(QString("Compilado — %1 pasos").arg(pasos.size()));
 
     } catch (const std::exception& e) {
+        setInputHook(nullptr);
         std::cout.rdbuf(old);
         QString salida = QString::fromStdString(buf.str()).toHtmlEscaped()
                             .replace("\n","<br>");
         if (!salida.isEmpty())
-            consolaSalida->append(salida);
-        consolaSalida->append(
-            QString("<span style='color:#f87171;'>%1</span>")
-            .arg(QString::fromStdString(e.what()).toHtmlEscaped()
-                 .replace("\n","<br>")));
+            html += salida;
+        html += QString("<br><span style='color:#f87171;'>%1</span>")
+                .arg(QString::fromStdString(e.what()).toHtmlEscaped()
+                     .replace("\n","<br>"));
         statusBar()->showMessage("Error de compilación.");
     }
 
     actualizarBotones();
+    mostrarTerminal(html.toStdString());
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -658,6 +962,14 @@ void VentanaPrincipal::aplicarEvento(const EventoPaso& ev) {
     case TipoEvento::MOSTRAR_SALIDA:
         resaltarLinea(ev.linea);
         estadoActual.mensajeEstado = "mostrar: " + ev.valor;
+        estadoActual.mensajeError  = false;
+        setMensajeEstado(estadoActual.mensajeEstado, false);
+        break;
+
+    case TipoEvento::LEER_SOLICITUD:
+        resaltarLinea(ev.linea);
+        estadoActual.lineaActiva = ev.linea;
+        estadoActual.mensajeEstado = "⌨ Solicitando entrada para: " + ev.nombre;
         estadoActual.mensajeError  = false;
         setMensajeEstado(estadoActual.mensajeEstado, false);
         break;

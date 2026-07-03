@@ -2,75 +2,30 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
-#include <fstream>
-#include <sstream>
-#include <regex>
-#include "lexer.hpp"
-#include "errors.hpp"
-#include "semantic.hpp"
+#include "core/lexer.hpp"
+#include "core/errors.hpp"
+#include "core/semantic.hpp"
+#include "core/eventos.hpp"
+#include "core/preprocesador.hpp"
 
 using namespace std;
 
-// Prototipos declarados en lexer.cpp y parser.cpp
 vector<Token> tokenizar(const string& fuente);
-double parsear(vector<Token>& tokens);
-
-std::string preprocesarBibliotecas(const std::string& codigoFuente) {
-    std::stringstream ss(codigoFuente);
-    std::string lineaTexto;
-    std::string codigoCompleto = "";
-    int numeroLinea = 1;
-
-    // Expresión regular para capturar: #incluir "archivo.txt"
-    std::regex regexIncluir(R"(^\s*#incluir\s+\"([^\"]+)\"\s*$)");
-    std::smatch match;
-
-    while (std::getline(ss, lineaTexto)) {
-        // Si la línea contiene un #incluir
-        if (std::regex_search(lineaTexto, match, regexIncluir)) {
-            std::string nombreArchivo = match[1].str();
-            
-            // Intentar abrir la biblioteca local
-            std::ifstream archivoBiblioteca(nombreArchivo);
-            if (!archivoBiblioteca.is_open()) {
-                throw std::runtime_error(error_archivo_no_encontrado(nombreArchivo, numeroLinea));
-            }
-
-            // Leer todo el contenido de la biblioteca
-            std::stringstream contenidoBiblioteca;
-            contenidoBiblioteca << archivoBiblioteca.rdbuf();
-            archivoBiblioteca.close();
-
-            // Procesar recursivamente por si la biblioteca tiene otros #incluir
-            codigoCompleto += preprocesarBibliotecas(contenidoBiblioteca.str()) + "\n";
-        } else if (lineaTexto.find("#incluir") != std::string::npos) {
-            // Si tiene la palabra pero no pasó la expresión regular, está mal escrita
-            throw std::runtime_error(error_directiva_biblioteca_mal(numeroLinea));
-        } else {
-            // Línea de código común y corriente
-            codigoCompleto += lineaTexto + "\n";
-        }
-        numeroLinea++;
-    }
-    return codigoCompleto;
-}
+double parsear(vector<Token>& tokens, vector<EventoPaso>* cola = nullptr);
 
 void compilarYEjecutar(const string& titulo, const string& codigo) {
     cout << "\n==================================================\n";
     cout << " PRUEBA: " << titulo << "\n";
     cout << "==================================================\n";
-    cout << "Código Fuente Original:\n" << codigo << "\n";
+    cout << "Codigo Fuente Original:\n" << codigo << "\n";
     cout << "--------------------------------------------------\n";
     cout << "Salida / Resultado:\n";
-    
+
     try {
-        // PASO NUEVO: El preprocesador une las bibliotecas primero
-        std::string codigoExpandido = preprocesarBibliotecas(codigo);
-        
-        // El lexer ahora procesa el código con las bibliotecas ya incrustadas
+        string codigoExpandido = preprocesarBibliotecas(codigo);
         auto tokens = tokenizar(codigoExpandido);
-        parsear(tokens); 
-        cout << "\n✓ Fin de la sección de pruebas sin caídas críticas.\n";
+        parsear(tokens);
+        cout << "\n✓ Fin de la seccion de pruebas sin caidas criticas.\n";
     } catch (const exception& e) {
         cout << e.what();
     }
@@ -78,162 +33,118 @@ void compilarYEjecutar(const string& titulo, const string& codigo) {
 }
 
 int main() {
-    // ----------------------------------------------------------------------
-    // PROBANDO CARACTERÍSTICAS CORRECTAS / EXITOSAS
-    // ----------------------------------------------------------------------
+    // ── Pruebas con la nueva gramática ───────────────────────────
 
-    // 1. Programa Completo Estructurado con Llamadas a Funciones y Ámbitos
-    string prueba_funciones_exito = 
-        "funcion calcularSuma(numero a, numero b) retornar numero {\n"
-        "    retornar a + b;\n"
-        "}\n"
-        "\n"
-        "vacio principal() {\n"
-        "    numero x = 10;\n"
-        "    numero y = 20;\n"
-        "    numero resultado = calcularSuma(x, y);\n"
-        "    mostrar(resultado);\n"
-        "}\n";
-    compilarYEjecutar("1. Declaración y Llamada de Funciones (Éxito)", prueba_funciones_exito);
-
-    // 2. Comprobando los nuevos tipos Booleanos, Caracteres y Condicionales Alfanuméricos
-    string prueba_tipos_nuevos = 
-        "vacio principal() {\n"
-        "    booleano bandera = verdadero;\n"
-        "    caracter opcion = 'A';\n"
-        "    si (bandera == verdadero)\n"
-        "        mostrar(\"El estado es verdadero de forma correcta\");\n"
-        "        mostrar(opcion);\n"
+    // 1. si / sino si / sino / fin_si
+    string prueba_sino_si =
+        "entero x = 15;\n"
+        "Principal() {\n"
+        "    si (x > 20) {\n"
+        "        mostrar(\"x > 20\");\n"
+        "    } sino si (x > 10) {\n"
+        "        mostrar(\"x > 10\");\n"
+        "    } sino {\n"
+        "        mostrar(\"x <= 10\");\n"
+        "    }\n"
         "    fin_si\n"
         "}\n";
-    compilarYEjecutar("2. Uso de Booleanos y Caracteres (Éxito)", prueba_tipos_nuevos);
+    compilarYEjecutar("1. si / sino si / sino / fin_si", prueba_sino_si);
 
-    // 3. Ejecución Secuencial Clásica (Sin función principal)
-    string prueba_secuencial = 
-        "numero a = 5;\n"
-        "numero b = 15;\n"
-        "mostrar(a * b);\n";
-    compilarYEjecutar("3. Modo de Ejecución Secuencial Estándar", prueba_secuencial);
-
-
-    // ----------------------------------------------------------------------
-    // PROBANDO ERRORES LÉXICOS (NUEVOS Y ANTIGUOS)
-    // ----------------------------------------------------------------------
-
-    // 4. Error Léxico - Comentario en bloque abierto (EOF Inesperado)
-    string error_lexico_comentario = 
-        "numero x = 10;\n"
-        "/* Esto es un comentario que inicia bien\n"
-        "   pero al programador se le olvidó poner el cierre de bloque\n"
-        "numero y = 20;\n";
-    compilarYEjecutar("4. Error Léxico - Comentario Abierto", error_lexico_comentario);
-
-    // 5. Error Léxico - Formatos Numéricos Letras O Símbolos Inválidos
-    string error_lexico_caracter = 
-        "vacio principal() {\n"
-        "    numero val = 45.12.3;\n" // Número mal formado
-        "    numero @invalido = 7;\n"  // Carácter '@' no pertenece al lenguaje
+    // 2. Principal() sin void, para/fin_para, ++
+    string prueba_para =
+        "Principal() {\n"
+        "    para (entero i = 1; i <= 5; i++) {\n"
+        "        mostrar(i);\n"
+        "    }\n"
+        "    fin_para\n"
         "}\n";
-    compilarYEjecutar("5. Error Léxico - Mal Formato Dinámico", error_lexico_caracter);
+    compilarYEjecutar("2. para / fin_para con ++", prueba_para);
 
-
-    // ----------------------------------------------------------------------
-    // PROBANDO ERRORES SINTÁCTICOS
-    // ----------------------------------------------------------------------
-
-    // 6. Error Sintáctico - Parentización Desbalanceada en Expresiones
-    string error_sintactico_parentesis = 
-        "vacio principal() {\n"
-        "    numero calculo = (5 + 3 * 2;\n" // Falta cerrar )
+    // 3. Operadores compuestos +=, -=, *=
+    string prueba_compuestos =
+        "Principal() {\n"
+        "    entero a = 10;\n"
+        "    a += 5;\n"
+        "    mostrar(a);\n"
+        "    a -= 3;\n"
+        "    mostrar(a);\n"
+        "    a *= 2;\n"
+        "    mostrar(a);\n"
         "}\n";
-    compilarYEjecutar("6. Error Sintáctico - Paréntesis Faltante", error_sintactico_parentesis);
+    compilarYEjecutar("3. += -= *=", prueba_compuestos);
 
-    // 7. Error Sintáctico - Estructuras de Bloques o Llaves Mal Cerradas
-    string error_sintactico_llaves = 
-        "funcion prueba() retornar numero {\n"
-        "    retornar 1;\n"
-        "// Falta cerrar la llave de la función aquí \n";
-    compilarYEjecutar("7. Error Sintáctico - Llaves Abiertas de Subrutina", error_sintactico_llaves);
+    // 4. Operadores lógicos &&, ||, !
+    string prueba_logicos =
+        "Principal() {\n"
+        "    entero a = 5;\n"
+        "    entero b = 10;\n"
+        "    si (a > 0 && b > 0) {\n"
+        "        mostrar(\"ambos positivos\");\n"
+        "    }\n"
+        "    fin_si\n"
+        "}\n";
+    compilarYEjecutar("4. && logico", prueba_logicos);
 
+    // 5. Cadena tipo
+    string prueba_cadena =
+        "Principal() {\n"
+        "    cadena saludo = \"Hola Mundo\";\n"
+        "    mostrar(saludo);\n"
+        "}\n";
+    compilarYEjecutar("5. Tipo cadena", prueba_cadena);
 
-    // ----------------------------------------------------------------------
-    // PROBANDO ERRORES SEMÁNTICOS (Aislamiento de Ámbitos y Firmas)
-    // ----------------------------------------------------------------------
+    // 6. Entero y Decimal
+    string prueba_decimal =
+        "Principal() {\n"
+        "    entero ent = 42;\n"
+        "    decimal dec = 3.14;\n"
+        "    mostrar(ent);\n"
+        "    mostrar(dec);\n"
+        "}\n";
+    compilarYEjecutar("6. Entero y Decimal", prueba_decimal);
 
-    // 8. Error Semántico - Intento de Acceso a Variables Locales de otra Función (Scope)
-    string error_semantico_ambito = 
-        "funcion externa() retornar numero {\n"
-        "    numero variableOculta = 99;\n"
-        "    retornar 0;\n"
+    // 7. -- decremento
+    string prueba_decremento =
+        "Principal() {\n"
+        "    entero c = 5;\n"
+        "    c--;\n"
+        "    mostrar(c);\n"
+        "}\n";
+    compilarYEjecutar("7. Decremento --", prueba_decremento);
+
+    // 8. Si simple
+    string prueba_si_simple =
+        "Principal() {\n"
+        "    entero x = 5;\n"
+        "    si (x == 5) {\n"
+        "        mostrar(\"es cinco\");\n"
+        "    }\n"
+        "    fin_si\n"
+        "}\n";
+    compilarYEjecutar("8. si simple", prueba_si_simple);
+
+    // 9. Mientras con operador lógico
+    string prueba_mientras_logico =
+        "Principal() {\n"
+        "    entero i = 0;\n"
+        "    mientras (i < 3) {\n"
+        "        mostrar(i);\n"
+        "        i++;\n"
+        "    }\n"
+        "    fin_mientras\n"
+        "}\n";
+    compilarYEjecutar("9. mientras con ++", prueba_mientras_logico);
+
+    // 10. Funcion con tipo de retorno (C++ style)
+    string prueba_func_retorno =
+        "entero doble(entero n) {\n"
+        "    retornar n * 2;\n"
         "}\n"
-        "\n"
-        "vacio principal() {\n"
-        "    externa();\n"
-        "    mostrar(variableOculta);\n" // ERROR: No existe en el ámbito de principal
+        "Principal() {\n"
+        "    entero r = doble(5);\n"
+        "    mostrar(r);\n"
         "}\n";
-    compilarYEjecutar("8. Error Semántico - Violación de Ámbito (Scope)", error_semantico_ambito);
+    compilarYEjecutar("10. Funcion con tipo de retorno (C++ style)", prueba_func_retorno);
 
-    // 9. Error Semántico - Duplicación y Colisión de Firmas de Funciones
-    string error_semantico_duplicado = 
-        "vacio miFuncion() {\n"
-        "    mostrar(1);\n"
-        "}\n"
-        "\n"
-        "funcion miFuncion(numero a) retornar numero {\n" // ERROR: Ya existe 'miFuncion'
-        "    retornar a;\n"
-        "}\n";
-    compilarYEjecutar("9. Error Semántico - Redefinición de Funciones", error_semantico_duplicado);
-
-    // 10. Error Semántico - Argumentos Inválidos en Conteo de Parámetros
-    string error_semantico_argumentos = 
-        "funcion procesar(numero a, numero b) retornar numero {\n"
-        "    retornar a * b;\n"
-        "}\n"
-        "\n"
-        "vacio principal() {\n"
-        "    numero test = procesar(5);\n" // ERROR: Falta el segundo parámetro
-        "}\n";
-    compilarYEjecutar("10. Error Semántico - Desajuste de Argumentos", error_semantico_argumentos);
-
-
-    // ----------------------------------------------------------------------
-    // ADVERTENCIAS Y AVISOS DE LIMPIEZA DE CÓDIGO
-    // ----------------------------------------------------------------------
-    
-    // Extra: Prueba de Variables Creadas pero Nunca Usadas
-    string aviso_limpieza = 
-        "numero globalInutil = 100;\n"
-        "vacio principal() {\n"
-        "    numero localInutil = 200;\n"
-        "    mostrar(\"Hola Mundo limpio\");\n"
-        "}\n";
-    compilarYEjecutar("EXTRA: Verificación de Advertencias por Variables No Usadas", aviso_limpieza);
-
-    // 11. Prueba de Modularidad y Bibliotecas Externas (#incluir)
-    string prueba_bibliotecas = 
-        "#incluir \"matematica.txt\"\n"
-        "\n"
-        "vacio principal() {\n"
-        "    numero miBase = 2;\n"
-        "    numero miExponente = 3;\n"
-        "    // Usando función de la biblioteca externa\n"
-        "    numero pot = calcularPotencia(miBase, miExponente);\n"
-        "    numero cuad = calcularCuadrado(10);\n"
-        "    \n"
-        "    mostrar(\"Resultado Potencia de la biblioteca:\");\n"
-        "    mostrar(pot);\n"
-        "    mostrar(\"Resultado Cuadrado de la biblioteca:\");\n"
-        "    mostrar(cuad);\n"
-        "}\n";
-    compilarYEjecutar("11. Importación de Bibliotecas Locales (Éxito)", prueba_bibliotecas);
-
-    // 12. Prueba de Error - Biblioteca No Existe
-    string error_biblioteca_inexistente = 
-        "#incluir \"libreria_fantasma.txt\"\n"
-        "vacio principal() {\n"
-        "    mostrar(1);\n"
-        "}\n";
-    compilarYEjecutar("12. Error Semántico/Sistema - Biblioteca Inexistente", error_biblioteca_inexistente);
-  
     return 0;
 }
