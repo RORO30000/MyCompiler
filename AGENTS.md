@@ -21,12 +21,12 @@ La comunicación entre capas ocurre via:
 ```
 MyCompiler/
 ├── src/
-│   ├── main.cpp                 # Entry point consola (test runner, 10 pruebas)
+│   ├── main.cpp                 # Entry point consola (test runner, 30 pruebas)
 │   ├── main_gui.cpp             # Entry point GUI Qt
 │   ├── core/
-│   │   ├── lexer.hpp            # Token types (TipoToken enum, ~40 tokens), Token struct
+│   │   ├── lexer.hpp            # Token types (TipoToken enum, ~60 tokens), Token struct
 │   │   ├── lexer.cpp            # Analizador léxico (tokenizar)
-│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~966 líneas)
+│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~1276 líneas)
 │   │   ├── semantic.hpp         # TablaVariables (scoped), TablaFunciones, Arreglo
 │   │   ├── errors.hpp           # Mensajes de error/warning/success en español
 │   │   ├── eventos.hpp          # TipoEvento enum, EventoPaso struct
@@ -59,7 +59,7 @@ MyCompiler/
 - **Comentarios**: bloques con líneas `// ─── ... ───` para separar secciones
 - **Headers**: `#pragma once`, sin namespaces (todo global)
 - **Errores**: se lanzan como `std::runtime_error` con mensajes desde `errors.hpp`
-- **Estado global del parser**: variables estáticas `pos`, `tkns`, `tabla`, `tablaFunciones`
+- **Estado global del parser**: variables estáticas `pos`, `tkns`, `tabla`, `tablaFunciones`, `tipoFuncionActual`
 
 ## Sintaxis del lenguaje
 
@@ -75,7 +75,10 @@ MyCompiler/
 
 ### Keywords
 
-`entero`, `decimal`, `cadena`, `booleano`, `caracter`, `vacio`, `si`, `sino`, `fin_si`, `mientras`, `fin_mientras`, `para`, `fin_para`, `mostrar`, `leer`, `retornar`, `arreglo`, `Principal`, `verdadero`, `falso`.
+`entero`, `decimal`, `cadena`, `booleano`, `caracter`, `vacio`, `funcion`, `retornar`, `arreglo`,
+`si`, `sino`, `fin_si`, `entonces`, `hacer`, `mientras`, `fin_mientras`, `para`, `fin_para`,
+`elegir`, `caso`, `defecto`, `parar`, `mostrar`, `leer`, `romper`, `continuar`, `no`,
+`Principal`, `verdadero`, `falso`.
 
 ### Operadores
 
@@ -83,9 +86,24 @@ MyCompiler/
 |---|---|
 | Aritméticos | `+`, `-`, `*`, `/`, `%` |
 | Comparación | `==`, `!=`, `<`, `>`, `<=`, `>=` |
-| Lógicos | `&&`, `\|\|`, `!` |
+| Lógicos | `&&`, `\|\|`, `!`, `no` (alias de `!`) |
 | Asignación | `=`, `+=`, `-=`, `*=` |
 | Incremento/Decremento | `++`, `--` |
+| Ternario | `si (cond) entonces v sino f` |
+
+### Tipado estricto
+
+El compilador valida tipos en:
+- **Declaraciones**: `entero x = "texto"` → error (cadena no cabe en entero)
+- **Asignaciones**: `x = "texto"` → error si `x` es entero
+- **Retorno de función**: `entero fn() { retornar "texto" }` → error
+- **Parámetros**: `fn("texto")` donde el parámetro espera `entero` → error
+- **Arreglos**: asignar un valor de tipo incorrecto a una celda → error
+
+Reglas de coerción implícita:
+- `decimal` acepta valores `entero` (promoción)
+- `cadena` acepta cualquier tipo (conversión textual)
+- `entero`, `booleano`, `caracter` solo aceptan su propio tipo
 
 ### Estructuras de control
 
@@ -94,8 +112,19 @@ si (cond) { ... } sino si (cond) { ... } sino { ... } fin_si
 
 mientras (cond) { ... } fin_mientras
 
+hacer { ... } mientras (cond) fin_mientras
+
 para (inic; cond; incr) { ... } fin_para
+
+elegir (expr) {
+    caso valor1: ... parar;
+    caso valor2: ... parar;
+    defecto: ...
+}
 ```
+
+- `romper` / `parar` sale del bucle o switch actual
+- `continuar` salta a la siguiente iteración del bucle
 
 ### Funciones
 
@@ -119,6 +148,12 @@ Principal() {
     mostrar("Hola Mundo");
 }
 ```
+
+### Expresiones
+
+- **Concatenación de cadenas**: `"Hola" + " Mundo"` → `"Hola Mundo"` (si algún operando no es numérico)
+- **Operador ternario**: `entero max = si (a > b) entonces a sino b;`
+- **Agrupación**: `(1 + 2) * 3`
 
 ## Flujo de ejecución
 
@@ -158,16 +193,31 @@ main()
 
 | Archivo | Líneas | Rol |
 |---|---|---|
-| `src/core/parser.cpp` | 966 | Corazón del compilador: gramática, ejecución, generación de eventos, `leer()` con inputHook |
+| `src/core/parser.cpp` | 1276 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook |
 | `src/gui/VentanaPrincipal.cpp` | 1190 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
 | `src/core/semantic.hpp` | 163 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
-| `src/core/lexer.cpp` | 178 | Tokenización: palabras reservadas, operadores, comentarios, cadenas |
-| `src/core/lexer.hpp` | 41 | Tipos de token (TipoToken) y estructura Token |
+| `src/core/lexer.cpp` | 188 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords) |
+| `src/core/lexer.hpp` | 45 | Tipos de token (TipoToken enum, ~60 tokens) y estructura Token |
 | `src/core/errors.hpp` | 147 | Catálogo completo de mensajes de error/advertencia en español |
 | `src/core/eventos.hpp` | 43 | Contrato de eventos entre parser y GUI |
 | `src/core/preprocesador.cpp` | 42 | Resolución recursiva de `#incluir` |
 | `src/core/preprocesador.hpp` | 4 | Declaración de `preprocesarBibliotecas` |
-| `src/main.cpp` | 150 | Test runner con 10 pruebas de la gramática |
+| `src/main.cpp` | 383 | Test runner con 30 pruebas (14 originales + 8 tipado + 8 features nuevas) |
 | `Makefile` | 80 | Build adaptativo con detección automática de Qt |
 
 Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del compilador (ej. `#include "core/lexer.hpp"`).
+
+## Historial de features
+
+| Feature | Commit/Añadido |
+|---|---|
+| si/sino/sino si/fin_si, mientras, para, ++/--, +=/-=/*= | Original |
+| Tipo `cadena`, `booleano`, `caracter` | Original |
+| Funciones con retorno estilo C++ | Original |
+| `romper`/`continuar` (break/continue) | 630ff71 |
+| `no` como alias de `!` | 62a730b |
+| Concatenación de cadenas con `+`, `hacer-mientras` | 3aca8d1 |
+| Operador ternario `si ... entonces ... sino` | 3337956 |
+| `elegir`/`caso`/`defecto`, `parar` como break | 4c27a3f |
+| Tipado estricto (validar tipos en declaración/asignación/retorno/parámetros/arreglos) | Actual |
+| Fix `formatearNumero` para locale con coma decimal | Actual |
