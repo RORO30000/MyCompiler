@@ -241,9 +241,20 @@ std::string parseExpresion(bool ejecutar) {
         TipoToken op = actual().tipo; pos++;
         std::string derStr = parseTermino(ejecutar);
         if (!ejecutar) continue;
-        double izq = std::stod(izqStr), der = std::stod(derStr);
-        izqStr = (op == TipoToken::SUMA) ? formatearNumero(izq + der)
-                                         : formatearNumero(izq - der);
+        if (op == TipoToken::SUMA) {
+            double izqN, derN;
+            bool izqEsNum = true, derEsNum = true;
+            try { izqN = std::stod(izqStr); } catch (...) { izqEsNum = false; }
+            try { derN = std::stod(derStr); } catch (...) { derEsNum = false; }
+            if (izqEsNum && derEsNum) {
+                izqStr = formatearNumero(izqN + derN);
+            } else {
+                izqStr = izqStr + derStr;
+            }
+        } else {
+            double izq = std::stod(izqStr), der = std::stod(derStr);
+            izqStr = formatearNumero(izq - der);
+        }
     }
     return izqStr;
 }
@@ -774,6 +785,68 @@ void parsePara(bool ejecutar) {
     emitir({TipoEvento::BUCLE_FIN, lineaPara});
 }
 
+// ─── hacer / mientras (do-while) ─────────────────────────────────
+void parseHacerMientras(bool ejecutar) {
+    pos++; // consume 'hacer'
+
+    if (!esTipo(TipoToken::LLAVE_IZ))
+        throw std::runtime_error(error_falta_token("{", actual().linea));
+    size_t posCuerpo = pos + 1;
+    pos++; // consume '{'
+
+    // Skip body (navigate without executing)
+    while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN))
+        parseSentencia(false);
+    consumir(TipoToken::LLAVE_DE);
+
+    if (!esTipo(TipoToken::MIENTRAS))
+        throw std::runtime_error(error_falta_token("mientras", actual().linea));
+    int lineaMientras = actual().linea;
+    pos++; // consume 'mientras'
+
+    size_t posCond = pos;
+    consumir(TipoToken::PAREN_IZ);
+    bool condBool = ejecutar ? evaluarCondicionCompleta(true) : false;
+    std::string cond = condBool ? "verdadero" : "falso";
+    consumir(TipoToken::PAREN_DE);
+
+    consumir(TipoToken::FIN_MIENTRAS);
+
+    if (!ejecutar) return;
+
+    emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
+
+    int maxIter = 10000;
+    bool salir = false;
+    do {
+        // Execute body
+        pos = posCuerpo;
+        while (true) {
+            if (esTipo(TipoToken::LLAVE_DE)) { pos++; break; }
+            parseSentencia(true);
+            if (solicitudRetorno) { salir = true; break; }
+            if (solicitudBreak) { solicitudBreak = false; salir = true; break; }
+            if (solicitudContinue) { solicitudContinue = false; break; }
+        }
+        if (salir) break;
+
+        // Re-evaluate condition
+        pos = posCond;
+        consumir(TipoToken::PAREN_IZ);
+        condBool = evaluarCondicionCompleta(true);
+        cond = condBool ? "verdadero" : "falso";
+        consumir(TipoToken::PAREN_DE);
+
+        emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
+
+    } while (cond == "verdadero" && maxIter-- > 0);
+
+    if (salir || !condBool || solicitudRetorno)
+        while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
+    consumir(TipoToken::FIN_MIENTRAS);
+    emitir({TipoEvento::BUCLE_FIN, lineaMientras});
+}
+
 // ─── mostrar ─────────────────────────────────────────────────────
 void parseMostrar(bool ejecutar) {
     int linMostrar = actual().linea;
@@ -919,10 +992,11 @@ void parseSentencia(bool ejecutar) {
         return;
     }
 
-    if (esTipo(TipoToken::LEER))     { parseLeer(ejecutar);    return; }
-    if (esTipo(TipoToken::SI))       { parseSi(ejecutar);      return; }
-    if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar); return; }
-    if (esTipo(TipoToken::PARA))     { parsePara(ejecutar);    return; }
+    if (esTipo(TipoToken::LEER))     { parseLeer(ejecutar);       return; }
+    if (esTipo(TipoToken::SI))       { parseSi(ejecutar);         return; }
+    if (esTipo(TipoToken::HACER))    { parseHacerMientras(ejecutar); return; }
+    if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar);    return; }
+    if (esTipo(TipoToken::PARA))     { parsePara(ejecutar);       return; }
 
     if (esTipo(TipoToken::VARIABLE)) {
         Token varTok = actual();

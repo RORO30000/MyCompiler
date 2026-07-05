@@ -228,5 +228,25 @@ int main() {
         "}\n";
     compilarYEjecutar("16. doble negacion 'no no'", prueba_doble_no);
 
+    // 17. Concatenacion de cadenas con +
+    string prueba_concat =
+        "Principal() {\n"
+        "    cadena saludo = \"Hola\";\n"
+        "    cadena mensaje = saludo + \" Mundo\";\n"
+        "    mostrar(mensaje);\n"
+        "}\n";
+    compilarYEjecutar("17. concatenacion de cadenas con +", prueba_concat);
+
+    // 18. hacer-mientras (do-while)
+    string prueba_hacer_mientras =
+        "Principal() {\n"
+        "    entero i = 0;\n"
+        "    hacer {\n"
+        "        mostrar(i);\n"
+        "        i++;\n"
+        "    } mientras (i < 3) fin_mientras\n"
+        "}\n";
+    compilarYEjecutar("18. hacer-mientras (do-while)", prueba_hacer_mientras);
+
     return 0;
 }

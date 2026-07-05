@@ -16,6 +16,7 @@ static TipoToken palabraReservada(const std::string& palabra) {
     if (palabra == "retornar")      return TipoToken::RETORNAR;
     if (palabra == "arreglo")       return TipoToken::ARREGLO;
     if (palabra == "si")            return TipoToken::SI;
+    if (palabra == "hacer")         return TipoToken::HACER;
     if (palabra == "sino")          return TipoToken::SINO;
     if (palabra == "fin_si")        return TipoToken::FIN_SI;
     if (palabra == "mientras")      return TipoToken::MIENTRAS;
