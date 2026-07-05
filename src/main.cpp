@@ -32,6 +32,25 @@ void compilarYEjecutar(const string& titulo, const string& codigo) {
     cout << "==================================================\n";
 }
 
+void compilarYEsperarError(const string& titulo, const string& codigo) {
+    cout << "\n==================================================\n";
+    cout << " PRUEBA (debe fallar): " << titulo << "\n";
+    cout << "==================================================\n";
+    cout << "Codigo Fuente Original:\n" << codigo << "\n";
+    cout << "--------------------------------------------------\n";
+
+    try {
+        string codigoExpandido = preprocesarBibliotecas(codigo);
+        auto tokens = tokenizar(codigoExpandido);
+        parsear(tokens);
+        cout << "\n✘ ERROR: Se esperaba un error de tipo pero no ocurrio.\n";
+    } catch (const exception& e) {
+        cout << e.what();
+        cout << "\n✓ Error de tipo detectado correctamente.\n";
+    }
+    cout << "==================================================\n";
+}
+
 int main() {
     // ── Pruebas con la nueva gramática ───────────────────────────
 
@@ -290,6 +309,75 @@ int main() {
         "    }\n"
         "}\n";
     compilarYEjecutar("22. elegir con defecto", prueba_elegir_defecto);
+
+    // ── Pruebas de tipado estricto (deben lanzar error) ──────────
+
+    // 23. entero = cadena
+    string prueba_tipo_entero_cadena =
+        "Principal() {\n"
+        "    entero x = \"Hola\";\n"
+        "}\n";
+    compilarYEsperarError("23. entero = cadena (debe fallar)", prueba_tipo_entero_cadena);
+
+    // 24. booleano = numero
+    string prueba_tipo_booleano_numero =
+        "Principal() {\n"
+        "    booleano b = 42;\n"
+        "}\n";
+    compilarYEsperarError("24. booleano = numero (debe fallar)", prueba_tipo_booleano_numero);
+
+    // 25. entero = booleano
+    string prueba_tipo_entero_booleano =
+        "Principal() {\n"
+        "    entero x = verdadero;\n"
+        "}\n";
+    compilarYEsperarError("25. entero = booleano (debe fallar)", prueba_tipo_entero_booleano);
+
+    // 26. Asignacion incorrecta
+    string prueba_tipo_asignacion =
+        "Principal() {\n"
+        "    entero x = 10;\n"
+        "    x = \"texto\";\n"
+        "}\n";
+    compilarYEsperarError("26. asignar cadena a entero (debe fallar)", prueba_tipo_asignacion);
+
+    // 27. Retorno incorrecto en funcion
+    string prueba_tipo_retorno =
+        "entero suma(entero a, entero b) {\n"
+        "    retornar \"error\";\n"
+        "}\n"
+        "Principal() {\n"
+        "    suma(1, 2);\n"
+        "}\n";
+    compilarYEsperarError("27. retornar cadena en funcion entero (debe fallar)", prueba_tipo_retorno);
+
+    // 28. Parametro incorrecto
+    string prueba_tipo_parametro =
+        "entero doble(entero n) {\n"
+        "    retornar n * 2;\n"
+        "}\n"
+        "Principal() {\n"
+        "    doble(\"hola\");\n"
+        "}\n";
+    compilarYEsperarError("28. pasar cadena como parametro entero (debe fallar)", prueba_tipo_parametro);
+
+    // 29. entero b = a + 10 (tipado estricto)
+    string prueba_suma_entero =
+        "Principal() {\n"
+        "    entero a = 42; // valor inicial\n"
+        "    entero b = a + 10; // suma\n"
+        "    mostrar(b); // resultado\n"
+        "}\n";
+    compilarYEjecutar("29. entero b = a + 10 (tipado estricto)", prueba_suma_entero);
+
+    // 30. entero b = 1 + 10 (literales)
+    string prueba_suma_literal =
+        "Principal() {\n"
+        "    entero a = 42;\n"
+        "    entero b = 1 + 10;\n"
+        "    mostrar(b);\n"
+        "}\n";
+    compilarYEjecutar("30. entero b = 1 + 10 (literales)", prueba_suma_literal);
 
     return 0;
 }

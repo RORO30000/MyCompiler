@@ -19,6 +19,7 @@ static bool        solicitudRetorno = false;
 static std::string valorRetornado   = "0";
 static bool        solicitudBreak    = false;
 static bool        solicitudContinue = false;
+static std::string tipoFuncionActual = "vacio";
 
 // Cola de eventos para la animación (null en modo consola)
 static std::vector<EventoPaso>* colaEventos = nullptr;
@@ -67,9 +68,51 @@ bool esTipoDeclaracion(TipoToken t) {
 
 std::string formatearNumero(double v) {
     std::string s = std::to_string(v);
+    // Normalizar separador decimal: algunos locales usan ',' en vez de '.'
+    for (auto& c : s) if (c == ',') c = '.';
     auto pos = s.find_last_not_of('0');
     if (s[pos] == '.') pos--;
     return s.substr(0, pos + 1);
+}
+
+// ─── Tipado estricto ─────────────────────────────────────────────
+static std::string inferirTipoValor(const std::string& valor) {
+    try {
+        std::stod(valor);
+        size_t dot = valor.find('.');
+        if (dot != std::string::npos) {
+            // Check that all chars after '.' are digits
+            bool soloDigitos = true;
+            for (size_t i = dot + 1; i < valor.size(); i++)
+                if (!isdigit(valor[i])) { soloDigitos = false; break; }
+            if (soloDigitos) return "decimal";
+        } else if (valor.find_first_not_of("0123456789-") == std::string::npos) {
+            return "entero";
+        }
+    } catch (...) {}
+
+    if (valor == "verdadero" || valor == "falso")
+        return "booleano";
+
+    if (valor.size() == 1)
+        return "caracter";
+
+    return "cadena";
+}
+
+static void validarTipo(const std::string& esperado, const std::string& valor, int linea) {
+    if (esperado == "vacio" || esperado == "desconocido") return;
+
+    std::string inferido = inferirTipoValor(valor);
+
+    // cadena acepta cualquier valor (conversion implicita)
+    if (esperado == "cadena") return;
+
+    // decimal acepta entero (conversion implicita)
+    if (esperado == "decimal" && inferido == "entero") return;
+
+    if (esperado != inferido)
+        throw std::runtime_error(error_tipos_incompatibles(esperado, inferido, linea));
 }
 
 // ─── Llamada a función ───────────────────────────────────────────
@@ -97,11 +140,16 @@ std::string ejecutarLlamadaFuncion(const std::string& nombreFunc, bool ejecutar)
     tabla.entrarAmbito();
 
     for (size_t i = 0; i < target.parametros.size(); i++) {
+        if (ejecutar)
+            validarTipo(target.parametros[i].first, argumentosEvaluados[i], actual().linea);
         tabla.declarar(target.parametros[i].second, target.parametros[i].first,
                        argumentosEvaluados[i], actual().linea);
         emitir({TipoEvento::VAR_DECLARADA, actual().linea,
                 target.parametros[i].second, argumentosEvaluados[i]});
     }
+
+    std::string tipoFuncionAnterior = tipoFuncionActual;
+    tipoFuncionActual = target.tipoRetorno;
 
     pos = target.posicionCuerpoTokens;
     consumir(TipoToken::LLAVE_IZ);
@@ -123,6 +171,7 @@ std::string ejecutarLlamadaFuncion(const std::string& nombreFunc, bool ejecutar)
 
     tabla.salirAmbito();
     pos = posRetorno;
+    tipoFuncionActual = tipoFuncionAnterior;
     solicitudRetorno = false;
 
     emitir({TipoEvento::FUNCION_RETORNO, actual().linea, nombreFunc, valorRetornado});
@@ -369,6 +418,7 @@ void parseDeclaracion(bool ejecutar) {
     std::string valor = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) {
+        validarTipo(tipoVar, valor, nombreTok.linea);
         tabla.declarar(nombreTok.valor, tipoVar, valor, nombreTok.linea);
         emitir({TipoEvento::LINEA_ACTIVA,  nombreTok.linea});
         emitir({TipoEvento::VAR_DECLARADA, nombreTok.linea, nombreTok.valor, valor});
@@ -409,6 +459,7 @@ void parseDeclaracionArreglo(bool ejecutar) {
         Arreglo& arr = tabla.obtenerArreglo(nombreTok.valor, nombreTok.linea);
 
         for (int i = 0; i < (int)valoresIniciales.size() && i < tamano; i++) {
+            validarTipo(tipoElem, valoresIniciales[i], nombreTok.linea);
             arr.asignar(i, valoresIniciales[i], nombreTok.linea);
         }
 
@@ -508,6 +559,8 @@ void parseAsignacion(const Token& varTok, bool ejecutar) {
     std::string valor = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) {
+        std::string tipoVar = tabla.obtener(varTok.valor, varTok.linea).tipo;
+        validarTipo(tipoVar, valor, varTok.linea);
         tabla.asignar(varTok.valor, valor, varTok.linea);
         emitir({TipoEvento::LINEA_ACTIVA,   varTok.linea});
         emitir({TipoEvento::VAR_MODIFICADA, varTok.linea, varTok.valor, valor});
@@ -520,6 +573,9 @@ void parseAsignacionCompuesta(const Token& varTok, TipoToken opToken, bool ejecu
     std::string derStr = parseExpresion(ejecutar);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) {
+        std::string tipoVar = tabla.obtener(varTok.valor, varTok.linea).tipo;
+        if (tipoVar != "entero" && tipoVar != "decimal")
+            throw std::runtime_error(error_tipos_incompatibles(tipoVar, "numero", varTok.linea));
         double izq = std::stod(tabla.obtener(varTok.valor, varTok.linea).valor);
         double der = std::stod(derStr);
         double r;
@@ -527,6 +583,7 @@ void parseAsignacionCompuesta(const Token& varTok, TipoToken opToken, bool ejecu
         else if (opToken == TipoToken::MENOS_IGUAL) r = izq - der;
         else r = izq * der;
         std::string val = formatearNumero(r);
+        validarTipo(tipoVar, val, varTok.linea);
         tabla.asignar(varTok.valor, val, varTok.linea);
         emitir({TipoEvento::LINEA_ACTIVA,   varTok.linea});
         emitir({TipoEvento::VAR_MODIFICADA, varTok.linea, varTok.valor, val});
@@ -544,6 +601,7 @@ void parseAsignacionArreglo(const Token& varTok, bool ejecutar) {
     if (ejecutar) {
         int idx = (int)std::stod(idxStr);
         Arreglo& arr = tabla.obtenerArreglo(varTok.valor, varTok.linea);
+        validarTipo(arr.tipo, valor, varTok.linea);
         arr.asignar(idx, valor, varTok.linea);
         emitir({TipoEvento::LINEA_ACTIVA,   varTok.linea});
         emitir({TipoEvento::ARREGLO_ESCRITO, varTok.linea, varTok.valor, valor, idx, "", arr.celdas});
@@ -1064,6 +1122,7 @@ void parseSentencia(bool ejecutar) {
         std::string val = parseExpresion(ejecutar);
         consumir(TipoToken::PUNTO_COMA);
         if (ejecutar) {
+            validarTipo(tipoFuncionActual, val, linRet);
             solicitudRetorno = true;
             valorRetornado   = val;
             emitir({TipoEvento::LINEA_ACTIVA,    linRet});
