@@ -206,5 +206,27 @@ int main() {
         "}\n";
     compilarYEjecutar("14. continue en para (impares)", prueba_continue_para);
 
+    // 15. Operador 'no' como alias de !
+    string prueba_no =
+        "booleano activo = falso;\n"
+        "Principal() {\n"
+        "    si (no activo) {\n"
+        "        mostrar(\"no activo es verdadero\");\n"
+        "    }\n"
+        "    fin_si\n"
+        "}\n";
+    compilarYEjecutar("15. operador 'no' como !", prueba_no);
+
+    // 16. Doble negacion con 'no'
+    string prueba_doble_no =
+        "booleano flag = verdadero;\n"
+        "Principal() {\n"
+        "    si (no no flag) {\n"
+        "        mostrar(\"doble no es verdadero\");\n"
+        "    }\n"
+        "    fin_si\n"
+        "}\n";
+    compilarYEjecutar("16. doble negacion 'no no'", prueba_doble_no);
+
     return 0;
 }

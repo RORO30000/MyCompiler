@@ -251,6 +251,18 @@ std::string parseExpresion(bool ejecutar) {
 // ─── Condición con operadores lógicos ────────────────────────────
 std::string parseCondicion(bool ejecutar) {
     std::string izqStr = parseExpresion(ejecutar);
+
+    // Si no viene operador de comparación → condición booleana directa
+    TipoToken t = actual().tipo;
+    if (t != TipoToken::IGUAL_IGUAL && t != TipoToken::DIFERENTE &&
+        t != TipoToken::MENOR && t != TipoToken::MAYOR &&
+        t != TipoToken::MENOR_IGUAL && t != TipoToken::MAYOR_IGUAL) {
+        if (!ejecutar) return "falso";
+        return (izqStr == "verdadero") ? "verdadero"
+             : (izqStr == "falso")     ? "falso"
+             : (std::stod(izqStr) != 0.0) ? "verdadero" : "falso";
+    }
+
     TipoToken op = actual().tipo; pos++;
     std::string derStr = parseExpresion(ejecutar);
     if (!ejecutar) return "falso";
@@ -519,7 +531,7 @@ void parseSi(bool ejecutar) {
         emitir({TipoEvento::CONDICION_SI, lineaSi, "", cond});
 
     bool ramaCierta = ejecutar && (cond == "verdadero");
-    bool saltado = false;
+    bool saltado = ramaCierta;
 
     // Cuerpo de la rama si (o sino si)
     while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {

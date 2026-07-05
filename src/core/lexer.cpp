@@ -26,6 +26,7 @@ static TipoToken palabraReservada(const std::string& palabra) {
     if (palabra == "leer")          return TipoToken::LEER;
     if (palabra == "romper")        return TipoToken::BREAK;
     if (palabra == "continuar")     return TipoToken::CONTINUE;
+    if (palabra == "no")            return TipoToken::NOT_LOGICO;
     if (palabra == "verdadero" || palabra == "falso") return TipoToken::LITERAL_BOOLEANO;
     return TipoToken::VARIABLE;
 }
