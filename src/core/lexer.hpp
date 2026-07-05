@@ -13,6 +13,7 @@ enum class TipoToken {
     ARREGLO,
     SI, SINO, FIN_SI, HACER, MIENTRAS, FIN_MIENTRAS, PARA, FIN_PARA,
     ENTONCES,
+    ELEGIR, CASO, DEFECTO, DOS_PUNTOS,
     MOSTRAR, LEER,
     INCREMENTO, DECREMENTO,
     MAS_IGUAL, MENOS_IGUAL, POR_IGUAL,
@@ -37,6 +38,7 @@ inline std::string tipoATexto(TipoToken tipo) {
         case TipoToken::CORCHETE_DE:   return "]";
         case TipoToken::PUNTO_COMA:    return ";";
         case TipoToken::COMA:          return ",";
+        case TipoToken::DOS_PUNTOS:    return ":";
         case TipoToken::IGUAL:         return "=";
         default:                       return "token";
     }

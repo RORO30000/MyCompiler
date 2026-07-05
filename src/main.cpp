@@ -267,5 +267,29 @@ int main() {
         "}\n";
     compilarYEjecutar("20. ternario con cadenas", prueba_ternario_cadena);
 
+    // 21. elegir / caso / defecto (switch)
+    string prueba_elegir =
+        "Principal() {\n"
+        "    entero x = 2;\n"
+        "    elegir (x) {\n"
+        "        caso 1: mostrar(\"uno\"); parar;\n"
+        "        caso 2: mostrar(\"dos\"); parar;\n"
+        "        defecto: mostrar(\"otro\");\n"
+        "    }\n"
+        "}\n";
+    compilarYEjecutar("21. elegir/caso/defecto", prueba_elegir);
+
+    // 22. elegir con defecto
+    string prueba_elegir_defecto =
+        "Principal() {\n"
+        "    entero x = 99;\n"
+        "    elegir (x) {\n"
+        "        caso 1: mostrar(\"uno\"); parar;\n"
+        "        caso 2: mostrar(\"dos\"); parar;\n"
+        "        defecto: mostrar(\"desconocido\");\n"
+        "    }\n"
+        "}\n";
+    compilarYEjecutar("22. elegir con defecto", prueba_elegir_defecto);
+
     return 0;
 }

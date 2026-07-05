@@ -867,6 +867,86 @@ void parseHacerMientras(bool ejecutar) {
     emitir({TipoEvento::BUCLE_FIN, lineaMientras});
 }
 
+// ─── elegir / caso / defecto (switch) ────────────────────────────
+void parseElegir(bool ejecutar) {
+    int lineaElegir = actual().linea;
+    pos++; // consume 'elegir'
+
+    consumir(TipoToken::PAREN_IZ);
+    std::string exprVal = ejecutar ? parseExpresion(true) : "0";
+    consumir(TipoToken::PAREN_DE);
+
+    consumir(TipoToken::LLAVE_IZ);
+
+    if (ejecutar)
+        emitir({TipoEvento::LINEA_ACTIVA, lineaElegir});
+
+    bool casoEjecutado = false;
+    bool salirSwitch = false;
+
+    while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
+        if (esTipo(TipoToken::CASO)) {
+            int lineaCaso = actual().linea;
+            pos++;
+            std::string casoVal = parseExpresion(ejecutar);
+            consumir(TipoToken::DOS_PUNTOS);
+
+            bool coincide = ejecutar && !casoEjecutado && (exprVal == casoVal);
+            if (coincide) casoEjecutado = true;
+
+            if (ejecutar && coincide)
+                emitir({TipoEvento::LINEA_ACTIVA, lineaCaso});
+
+            while (!esTipo(TipoToken::CASO) && !esTipo(TipoToken::DEFECTO) &&
+                   !esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
+                if (esTipo(TipoToken::BREAK)) {
+                    pos++;
+                    consumir(TipoToken::PUNTO_COMA);
+                    if (ejecutar && (coincide || casoEjecutado)) {
+                        solicitudBreak = true;
+                        salirSwitch = true;
+                    }
+                    break;
+                }
+                parseSentencia(coincide || casoEjecutado);
+                if (solicitudRetorno) { salirSwitch = true; break; }
+                if (solicitudBreak) { salirSwitch = true; break; }
+            }
+            if (salirSwitch || solicitudRetorno) break;
+
+        } else if (esTipo(TipoToken::DEFECTO)) {
+            pos++;
+            consumir(TipoToken::DOS_PUNTOS);
+
+            bool ejecutarDefecto = ejecutar && !casoEjecutado;
+
+            if (ejecutar && ejecutarDefecto)
+                emitir({TipoEvento::LINEA_ACTIVA, actual().linea});
+
+            while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
+                if (esTipo(TipoToken::BREAK)) {
+                    pos++;
+                    consumir(TipoToken::PUNTO_COMA);
+                    break;
+                }
+                parseSentencia(ejecutarDefecto);
+                if (solicitudRetorno) break;
+                if (solicitudBreak) break;
+            }
+            break;
+
+        } else {
+            pos++;
+        }
+    }
+
+    if (salirSwitch || solicitudRetorno)
+        while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) pos++;
+
+    consumir(TipoToken::LLAVE_DE);
+    solicitudBreak = false;
+}
+
 // ─── mostrar ─────────────────────────────────────────────────────
 void parseMostrar(bool ejecutar) {
     int linMostrar = actual().linea;
@@ -1034,6 +1114,7 @@ void parseSentencia(bool ejecutar) {
         }
         // Ternario a nivel de sentencia → lo agarra parseExpresion abajo
     }
+    if (esTipo(TipoToken::ELEGIR))   { parseElegir(ejecutar);       return; }
     if (esTipo(TipoToken::HACER))    { parseHacerMientras(ejecutar); return; }
     if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar);    return; }
     if (esTipo(TipoToken::PARA))     { parsePara(ejecutar);       return; }

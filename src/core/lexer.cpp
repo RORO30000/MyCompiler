@@ -18,6 +18,10 @@ static TipoToken palabraReservada(const std::string& palabra) {
     if (palabra == "si")            return TipoToken::SI;
     if (palabra == "entonces")      return TipoToken::ENTONCES;
     if (palabra == "hacer")         return TipoToken::HACER;
+    if (palabra == "elegir")        return TipoToken::ELEGIR;
+    if (palabra == "caso")          return TipoToken::CASO;
+    if (palabra == "defecto")       return TipoToken::DEFECTO;
+    if (palabra == "parar")         return TipoToken::BREAK;
     if (palabra == "sino")          return TipoToken::SINO;
     if (palabra == "fin_si")        return TipoToken::FIN_SI;
     if (palabra == "mientras")      return TipoToken::MIENTRAS;
@@ -171,6 +175,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             case '}': tokens.push_back({TipoToken::LLAVE_DE,     "}", linea}); break;
             case '[': tokens.push_back({TipoToken::CORCHETE_IZ,  "[", linea}); break;
             case ']': tokens.push_back({TipoToken::CORCHETE_DE,  "]", linea}); break;
+            case ':': tokens.push_back({TipoToken::DOS_PUNTOS,   ":", linea}); break;
             case ';': tokens.push_back({TipoToken::PUNTO_COMA,   ";", linea}); break;
             case ',': tokens.push_back({TipoToken::COMA,         ",", linea}); break;
             default:  throw std::runtime_error(error_lexico_caracter(c, linea));
