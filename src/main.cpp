@@ -248,5 +248,24 @@ int main() {
         "}\n";
     compilarYEjecutar("18. hacer-mientras (do-while)", prueba_hacer_mientras);
 
+    // 19. Ternario si ... entonces ... sino
+    string prueba_ternario =
+        "Principal() {\n"
+        "    entero a = 10;\n"
+        "    entero b = 20;\n"
+        "    entero max = si (a > b) entonces a sino b;\n"
+        "    mostrar(max);\n"
+        "}\n";
+    compilarYEjecutar("19. ternario si...entonces...sino", prueba_ternario);
+
+    // 20. Ternario con cadenas
+    string prueba_ternario_cadena =
+        "Principal() {\n"
+        "    entero edad = 15;\n"
+        "    cadena msg = si (edad >= 18) entonces \"Mayor\" sino \"Menor\";\n"
+        "    mostrar(msg);\n"
+        "}\n";
+    compilarYEjecutar("20. ternario con cadenas", prueba_ternario_cadena);
+
     return 0;
 }

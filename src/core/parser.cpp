@@ -129,6 +129,9 @@ std::string ejecutarLlamadaFuncion(const std::string& nombreFunc, bool ejecutar)
     return valorRetornado;
 }
 
+// ─── Forward declarations ────────────────────────────────────────
+bool evaluarCondicionCompleta(bool ejecutar);
+
 // ─── Expresiones ─────────────────────────────────────────────────
 std::string parsePrimario(bool ejecutar) {
     Token t = actual();
@@ -214,6 +217,23 @@ std::string parsePrimario(bool ejecutar) {
         std::string val = parseExpresion(ejecutar);
         consumir(TipoToken::PAREN_DE);
         return val;
+    }
+
+    // Ternario: si (cond) entonces v sino f
+    if (t.tipo == TipoToken::SI) {
+        int lineaSi = t.linea;
+        pos++; // consume 'si'
+        consumir(TipoToken::PAREN_IZ);
+        bool cond = evaluarCondicionCompleta(ejecutar);
+        consumir(TipoToken::PAREN_DE);
+        consumir(TipoToken::ENTONCES);
+        std::string valTrue = parseExpresion(ejecutar);
+        consumir(TipoToken::SINO);
+        std::string valFalse = parseExpresion(ejecutar);
+        if (!ejecutar) return "0";
+        emitir({TipoEvento::LINEA_ACTIVA, lineaSi});
+        emitir({TipoEvento::CONDICION_SI, lineaSi, "", cond ? "verdadero" : "falso"});
+        return cond ? valTrue : valFalse;
     }
 
     throw std::runtime_error(error_token_inesperado(t.valor, t.linea));
@@ -993,7 +1013,27 @@ void parseSentencia(bool ejecutar) {
     }
 
     if (esTipo(TipoToken::LEER))     { parseLeer(ejecutar);       return; }
-    if (esTipo(TipoToken::SI))       { parseSi(ejecutar);         return; }
+    if (esTipo(TipoToken::SI)) {
+        // Lookahead: si (cond) entonces → ternario, si (cond) { → condicional
+        bool esTernario = false;
+        if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::PAREN_IZ) {
+            size_t tmp = pos + 2;
+            int depth = 1;
+            while (tmp < tkns->size() && depth > 0) {
+                if ((*tkns)[tmp].tipo == TipoToken::PAREN_IZ) depth++;
+                if ((*tkns)[tmp].tipo == TipoToken::PAREN_DE) depth--;
+                if (depth > 0) tmp++;
+            }
+            tmp++;
+            if (tmp < tkns->size() && (*tkns)[tmp].tipo == TipoToken::ENTONCES)
+                esTernario = true;
+        }
+        if (!esTernario) {
+            parseSi(ejecutar);
+            return;
+        }
+        // Ternario a nivel de sentencia → lo agarra parseExpresion abajo
+    }
     if (esTipo(TipoToken::HACER))    { parseHacerMientras(ejecutar); return; }
     if (esTipo(TipoToken::MIENTRAS)) { parseMientras(ejecutar);    return; }
     if (esTipo(TipoToken::PARA))     { parsePara(ejecutar);       return; }
