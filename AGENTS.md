@@ -8,7 +8,7 @@ Compilador e intérprete educativo de un lenguaje de programación con sintaxis 
 
 Dos capas desacopladas:
 
-1. **Núcleo del compilador** (C++17 puro, sin dependencias externas): preprocesador → lexer → parser (intérprete recursivo descendente, dos pasadas: registro de funciones → ejecución de `principal`). Soporta entrada por `leer()` via `std::cin` (consola) o `inputHook` (GUI).
+1. **Núcleo del compilador** (C++17 puro, sin dependencias externas): preprocesador → lexer → parser (intérprete recursivo descendente, dos pasadas: registro de funciones → ejecución de `Principal`). Soporta entrada por `leer()` via `std::cin` (consola) o `inputHook` (GUI).
 2. **Interfaz gráfica** (Qt6/Qt5): editor con gutter, terminal emergente con HTML, panel de animación con tarjetas de variables y vista de arreglos, navegación paso a paso con historial de snapshots.
 
 La comunicación entre capas ocurre via:
@@ -21,20 +21,21 @@ La comunicación entre capas ocurre via:
 ```
 MyCompiler/
 ├── src/
-│   ├── main.cpp                 # Entry point consola (test runner, 12 pruebas)
+│   ├── main.cpp                 # Entry point consola (test runner, 10 pruebas)
 │   ├── main_gui.cpp             # Entry point GUI Qt
 │   ├── core/
-│   │   ├── lexer.hpp            # Token types (TipoToken enum), Token struct
+│   │   ├── lexer.hpp            # Token types (TipoToken enum, ~40 tokens), Token struct
 │   │   ├── lexer.cpp            # Analizador léxico (tokenizar)
-│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete
+│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~966 líneas)
 │   │   ├── semantic.hpp         # TablaVariables (scoped), TablaFunciones, Arreglo
 │   │   ├── errors.hpp           # Mensajes de error/warning/success en español
 │   │   ├── eventos.hpp          # TipoEvento enum, EventoPaso struct
+│   │   ├── preprocesador.hpp    # Declaración de preprocesarBibliotecas
 │   │   └── preprocesador.cpp    # #incluir "archivo" → resolución recursiva
 │   └── gui/
 │       ├── VentanaPrincipal.hpp # VentanaPrincipal, CodeEditor, LineNumberArea
-│       └── VentanaPrincipal.cpp # IDE gráfico completo (878 líneas)
-├── programas/                   # Carpeta de programas del usuario (generada)
+│       └── VentanaPrincipal.cpp # IDE gráfico completo (~1190 líneas)
+├── programas/                   # Carpeta de programas del usuario
 ├── Makefile                     # Build adaptativo (Qt6/Qt5 auto-detect)
 ├── matematica.txt               # Biblioteca de ejemplo para #incluir
 ├── README.md                    # Documentación en español
@@ -59,7 +60,65 @@ MyCompiler/
 - **Headers**: `#pragma once`, sin namespaces (todo global)
 - **Errores**: se lanzan como `std::runtime_error` con mensajes desde `errors.hpp`
 - **Estado global del parser**: variables estáticas `pos`, `tkns`, `tabla`, `tablaFunciones`
-- **El lenguaje del compilador usa keywords en español** (`numero`, `vacio`, `funcion`, `si`, `mientras`, `mostrar`, `leer`, `arreglo`, etc.)
+
+## Sintaxis del lenguaje
+
+### Tipos de datos
+
+| Tipo | Descripción | Ejemplo |
+|---|---|---|
+| `entero` | Número entero | `entero x = 42;` |
+| `decimal` | Número con punto flotante | `decimal pi = 3.14;` |
+| `cadena` | Texto entre comillas dobles | `cadena s = "Hola";` |
+| `booleano` | `verdadero` o `falso` | `booleano ok = verdadero;` |
+| `caracter` | Un carácter entre comillas simples | `caracter c = 'A';` |
+
+### Keywords
+
+`entero`, `decimal`, `cadena`, `booleano`, `caracter`, `vacio`, `si`, `sino`, `fin_si`, `mientras`, `fin_mientras`, `para`, `fin_para`, `mostrar`, `leer`, `retornar`, `arreglo`, `Principal`, `verdadero`, `falso`.
+
+### Operadores
+
+| Categoría | Operadores |
+|---|---|
+| Aritméticos | `+`, `-`, `*`, `/`, `%` |
+| Comparación | `==`, `!=`, `<`, `>`, `<=`, `>=` |
+| Lógicos | `&&`, `\|\|`, `!` |
+| Asignación | `=`, `+=`, `-=`, `*=` |
+| Incremento/Decremento | `++`, `--` |
+
+### Estructuras de control
+
+```
+si (cond) { ... } sino si (cond) { ... } sino { ... } fin_si
+
+mientras (cond) { ... } fin_mientras
+
+para (inic; cond; incr) { ... } fin_para
+```
+
+### Funciones
+
+Con tipo de retorno (C++ style):
+```
+entero sumar(entero a, entero b) {
+    retornar a + b;
+}
+```
+
+Sin retorno (`vacio`):
+```
+vacio saludar() {
+    mostrar("Hola");
+}
+```
+
+Punto de entrada (`Principal`):
+```
+Principal() {
+    mostrar("Hola Mundo");
+}
+```
 
 ## Flujo de ejecución
 
@@ -70,8 +129,8 @@ main()
        ├─ preprocesarBibliotecas()   → resuelve #incluir
        ├─ tokenizar()                → produce vector<Token>
        └─ parsear(tokens)            → dos pasadas:
-            ├─ Fase 1: registra todas las funciones (ejecutar=false)
-            └─ Fase 2: ejecuta principal() (o modo secuencial si no existe)
+            ├─ Fase 1: registra funciones + ejecuta declaraciones globales (ejecutar=true)
+            └─ Fase 2: ejecuta Principal() (o modo secuencial si no existe)
 ```
 
 ### Modo GUI (`main_gui.cpp`)
@@ -99,13 +158,16 @@ main()
 
 | Archivo | Líneas | Rol |
 |---|---|---|
-| `parser.cpp` | 555 | Corazón del compilador: gramática, ejecución, generación de eventos, `leer()` con inputHook |
-| `VentanaPrincipal.cpp` | 940 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
-| `semantic.hpp` | 163 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
-| `lexer.cpp` | 146 | Tokenización: palabras reservadas, operadores, comentarios, cadenas |
-| `errors.hpp` | 147 | Catálogo completo de mensajes de error/advertencia en español |
-| `eventos.hpp` | 42 | Contrato de eventos entre parser y GUI |
+| `src/core/parser.cpp` | 966 | Corazón del compilador: gramática, ejecución, generación de eventos, `leer()` con inputHook |
+| `src/gui/VentanaPrincipal.cpp` | 1190 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
+| `src/core/semantic.hpp` | 163 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
+| `src/core/lexer.cpp` | 178 | Tokenización: palabras reservadas, operadores, comentarios, cadenas |
+| `src/core/lexer.hpp` | 41 | Tipos de token (TipoToken) y estructura Token |
+| `src/core/errors.hpp` | 147 | Catálogo completo de mensajes de error/advertencia en español |
+| `src/core/eventos.hpp` | 43 | Contrato de eventos entre parser y GUI |
 | `src/core/preprocesador.cpp` | 42 | Resolución recursiva de `#incluir` |
-| `Makefile` | 75 | Build adaptativo con detección automática de Qt |
+| `src/core/preprocesador.hpp` | 4 | Declaración de `preprocesarBibliotecas` |
+| `src/main.cpp` | 150 | Test runner con 10 pruebas de la gramática |
+| `Makefile` | 80 | Build adaptativo con detección automática de Qt |
 
 Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del compilador (ej. `#include "core/lexer.hpp"`).

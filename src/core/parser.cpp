@@ -17,6 +17,8 @@ static TablaFunciones      tablaFunciones;
 
 static bool        solicitudRetorno = false;
 static std::string valorRetornado   = "0";
+static bool        solicitudBreak    = false;
+static bool        solicitudContinue = false;
 
 // Cola de eventos para la animación (null en modo consola)
 static std::vector<EventoPaso>* colaEventos = nullptr;
@@ -106,10 +108,14 @@ std::string ejecutarLlamadaFuncion(const std::string& nombreFunc, bool ejecutar)
 
     solicitudRetorno = false;
     valorRetornado   = "0";
+    solicitudBreak    = false;
+    solicitudContinue = false;
 
     while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
         parseSentencia(true);
         if (solicitudRetorno) break;
+        if (solicitudBreak)   { solicitudBreak = false; break; }
+        if (solicitudContinue) { solicitudContinue = false; break; }
     }
 
     while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) pos++;
@@ -517,8 +523,12 @@ void parseSi(bool ejecutar) {
 
     // Cuerpo de la rama si (o sino si)
     while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-        parseSentencia(ramaCierta); if (solicitudRetorno) break;
+        parseSentencia(ramaCierta);
+        if (solicitudRetorno) break;
+        if (solicitudBreak || solicitudContinue) break;
     }
+    // Si break/continue/retorno ocurrió dentro de {…}, saltar } restantes
+    while (esTipo(TipoToken::LLAVE_DE)) pos++;
 
     // Manejar cadenas sino / sino si
     while (esTipo(TipoToken::SINO)) {
@@ -538,16 +548,20 @@ void parseSi(bool ejecutar) {
             if (ramaSinoSi) saltado = true;
 
             while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-                parseSentencia(ramaSinoSi); if (solicitudRetorno) break;
+                parseSentencia(ramaSinoSi);
+                if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
             }
+            while (esTipo(TipoToken::LLAVE_DE)) pos++;
         } else {
             // sino { ... }
             bool ramaFalsa = ejecutar && !saltado;
             saltado = true;
 
             while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-                parseSentencia(ramaFalsa); if (solicitudRetorno) break;
+                parseSentencia(ramaFalsa);
+                if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
             }
+            while (esTipo(TipoToken::LLAVE_DE)) pos++;
             break;
         }
     }
@@ -575,12 +589,16 @@ void parseMientras(bool ejecutar) {
         emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
 
     int maxIter = 10000;
-    while (cond == "verdadero" && maxIter-- > 0) {
+    bool salir = false;
+    while (cond == "verdadero" && maxIter-- > 0 && !salir) {
         pos = posCuerpo;
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) {
-            parseSentencia(true); if (solicitudRetorno) break;
+            parseSentencia(true);
+            if (solicitudRetorno)  { salir = true; break; }
+            if (solicitudBreak)    { solicitudBreak = false; salir = true; break; }
+            if (solicitudContinue) { solicitudContinue = false; break; }
         }
-        if (solicitudRetorno) break;
+        if (salir) break;
 
         pos = posMientras + 1;
         consumir(TipoToken::PAREN_IZ);
@@ -592,7 +610,7 @@ void parseMientras(bool ejecutar) {
         emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
     }
 
-    if (!condBool || solicitudRetorno) {
+    if (salir || !condBool || solicitudRetorno) {
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
     }
     consumir(TipoToken::FIN_MIENTRAS);
@@ -665,8 +683,9 @@ void parsePara(bool ejecutar) {
     size_t posCondEval = posCond;
     bool condResult = true;
     int maxIter = 10000;
+    bool salir = false;
 
-    while (condResult && maxIter-- > 0) {
+    while (condResult && maxIter-- > 0 && !salir) {
         // Evaluar condición
         pos = posCondEval;
         if (esTipo(TipoToken::PUNTO_COMA)) {
@@ -689,9 +708,12 @@ void parsePara(bool ejecutar) {
 
         // Cuerpo
         while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN)) {
-            parseSentencia(true); if (solicitudRetorno) break;
+            parseSentencia(true);
+            if (solicitudRetorno)  { salir = true; break; }
+            if (solicitudBreak)    { solicitudBreak = false; salir = true; break; }
+            if (solicitudContinue) { solicitudContinue = false; break; }
         }
-        if (solicitudRetorno) break;
+        if (salir) break;
 
         // Incremento (sin ; al final, a diferencia de una sentencia normal)
         pos = posInc;
@@ -833,7 +855,7 @@ void parseDefinicionFuncionConRetorno() {
 }
 
 void parseSentencia(bool ejecutar) {
-    if (solicitudRetorno) return;
+    if (solicitudRetorno || solicitudBreak || solicitudContinue) return;
 
     if (esTipo(TipoToken::LLAVE_IZ) || esTipo(TipoToken::LLAVE_DE)) { pos++; return; }
     if (esTipo(TipoToken::MOSTRAR))  { parseMostrar(ejecutar); return; }
@@ -861,6 +883,26 @@ void parseSentencia(bool ejecutar) {
             valorRetornado   = val;
             emitir({TipoEvento::LINEA_ACTIVA,    linRet});
             emitir({TipoEvento::FUNCION_RETORNO, linRet, "", val});
+        }
+        return;
+    }
+
+    if (esTipo(TipoToken::BREAK)) {
+        int linBreak = actual().linea; pos++;
+        consumir(TipoToken::PUNTO_COMA);
+        if (ejecutar) {
+            solicitudBreak = true;
+            emitir({TipoEvento::LINEA_ACTIVA, linBreak});
+        }
+        return;
+    }
+
+    if (esTipo(TipoToken::CONTINUE)) {
+        int linCont = actual().linea; pos++;
+        consumir(TipoToken::PUNTO_COMA);
+        if (ejecutar) {
+            solicitudContinue = true;
+            emitir({TipoEvento::LINEA_ACTIVA, linCont});
         }
         return;
     }
@@ -936,6 +978,8 @@ double parsear(std::vector<Token>& tokens, std::vector<EventoPaso>* cola) {
     tabla            = TablaVariables();
     tablaFunciones   = TablaFunciones();
     solicitudRetorno = false;
+    solicitudBreak    = false;
+    solicitudContinue = false;
     colaEventos      = cola;
 
     // Fase 1: Registrar funciones y variables globales

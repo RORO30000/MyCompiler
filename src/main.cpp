@@ -146,5 +146,65 @@ int main() {
         "}\n";
     compilarYEjecutar("10. Funcion con tipo de retorno (C++ style)", prueba_func_retorno);
 
+    // 11. break en mientras
+    string prueba_break =
+        "Principal() {\n"
+        "    entero i = 0;\n"
+        "    mientras (i < 10) {\n"
+        "        si (i == 3) {\n"
+        "            romper;\n"
+        "        }\n"
+        "        fin_si\n"
+        "        mostrar(i);\n"
+        "        i++;\n"
+        "    }\n"
+        "    fin_mientras\n"
+        "}\n";
+    compilarYEjecutar("11. break en mientras", prueba_break);
+
+    // 12. continue en mientras
+    string prueba_continue =
+        "Principal() {\n"
+        "    entero i = 0;\n"
+        "    mientras (i < 5) {\n"
+        "        i++;\n"
+        "        si (i == 3) {\n"
+        "            continuar;\n"
+        "        }\n"
+        "        fin_si\n"
+        "        mostrar(i);\n"
+        "    }\n"
+        "    fin_mientras\n"
+        "}\n";
+    compilarYEjecutar("12. continue en mientras", prueba_continue);
+
+    // 13. break en para
+    string prueba_break_para =
+        "Principal() {\n"
+        "    para (entero i = 0; i < 10; i++) {\n"
+        "        si (i == 4) {\n"
+        "            romper;\n"
+        "        }\n"
+        "        fin_si\n"
+        "        mostrar(i);\n"
+        "    }\n"
+        "    fin_para\n"
+        "}\n";
+    compilarYEjecutar("13. break en para", prueba_break_para);
+
+    // 14. continue en para
+    string prueba_continue_para =
+        "Principal() {\n"
+        "    para (entero i = 0; i < 6; i++) {\n"
+        "        si (i % 2 == 0) {\n"
+        "            continuar;\n"
+        "        }\n"
+        "        fin_si\n"
+        "        mostrar(i);\n"
+        "    }\n"
+        "    fin_para\n"
+        "}\n";
+    compilarYEjecutar("14. continue en para (impares)", prueba_continue_para);
+
     return 0;
 }
