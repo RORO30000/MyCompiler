@@ -318,6 +318,10 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     comboPlantillas->addItem("Op. compuestos");
     comboPlantillas->addItem("Incr/Decr");
     comboPlantillas->addItem("Logicos");
+    comboPlantillas->addItem("Hacer");
+    comboPlantillas->addItem("Elegir");
+    comboPlantillas->addItem("Ternario");
+    comboPlantillas->addItem("Sin init");
 
     botonSiguiente->setEnabled(false);
     botonAnterior->setEnabled(false);
@@ -741,11 +745,52 @@ void VentanaPrincipal::cargarPlantilla(const QString& nombre)
                 "si(a > 0 && b > 0){\n"
                 "    mostrar(\"ambos positivos\");\n"
                 "}\n"
+                "fin_si\n"
                 "si(!(a == b)){\n"
                 "    mostrar(\"son diferentes\");\n"
                 "}\n"
-                "fin_si\n"
                 "fin_si\n";
+        }
+
+        else if(nombre == "Hacer")
+        {
+            codigo =
+                "\nentero i = 0;\n"
+                "hacer {\n"
+                "    mostrar(i);\n"
+                "    i++;\n"
+                "} mientras (i < 3) fin_mientras\n";
+        }
+
+        else if(nombre == "Elegir")
+        {
+            codigo =
+                "\nentero x = 2;\n"
+                "elegir (x) {\n"
+                "    caso 1: mostrar(\"uno\"); parar;\n"
+                "    caso 2: mostrar(\"dos\"); parar;\n"
+                "    defecto: mostrar(\"otro\");\n"
+                "}\n";
+        }
+
+        else if(nombre == "Ternario")
+        {
+            codigo =
+                "\nentero edad = 15;\n"
+                "cadena msg = si (edad >= 18) entonces \"Mayor\" sino \"Menor\";\n"
+                "mostrar(msg);\n";
+        }
+
+        else if(nombre == "Sin init")
+        {
+            codigo =
+                "\nentero a;\n"
+                "decimal b;\n"
+                "cadena c;\n"
+                "booleano d;\n"
+                "caracter e;\n"
+                "a = 10;\n"
+                "mostrar(a);\n";
         }
 
         QTextCursor cursor = editorCodigo->textCursor();
