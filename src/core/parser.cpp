@@ -511,7 +511,7 @@ void parseDefinicionFuncion() {
             throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
         consumir(TipoToken::LLAVE_DE);
     } else {
-        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+        throw std::runtime_error(error_falta_llave_izq(nombreFuncTok.linea));
     }
 
     ObjetoFuncion nuevaFunc = {tipoRetorno, nombreFuncTok.valor, parametros, posCuerpo};
@@ -546,7 +546,7 @@ void parseDefinicionFuncionSimple() {
             throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
         consumir(TipoToken::LLAVE_DE);
     } else {
-        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+        throw std::runtime_error(error_falta_llave_izq(nombreFuncTok.linea));
     }
 
     ObjetoFuncion nuevaFunc = {"vacio", nombreFuncTok.valor, parametros, posCuerpo};
@@ -748,7 +748,7 @@ void parsePara(bool ejecutar) {
         }
     }
     if (!esTipo(TipoToken::PUNTO_COMA))
-        throw std::runtime_error(error_falta_token(";", actual().linea));
+        throw std::runtime_error(error_falta_punto_coma(actual().linea));
     pos++;
 
     // Condición
@@ -762,14 +762,14 @@ void parsePara(bool ejecutar) {
     // Saltar hasta el ; de la condición
     while (!esTipo(TipoToken::PUNTO_COMA) && !esTipo(TipoToken::FIN)) pos++;
     if (!esTipo(TipoToken::PUNTO_COMA))
-        throw std::runtime_error(error_falta_token(";", actual().linea));
+        throw std::runtime_error(error_falta_punto_coma(actual().linea));
     pos++;
 
     // Incremento
     size_t posInc = pos;
     while (!esTipo(TipoToken::PAREN_DE) && !esTipo(TipoToken::FIN)) pos++;
     if (!esTipo(TipoToken::PAREN_DE))
-        throw std::runtime_error(error_falta_token(")", actual().linea));
+        throw std::runtime_error(error_falta_parentesis_der(actual().linea));
     pos++;
 
     size_t posCuerpo = pos;
@@ -868,7 +868,7 @@ void parseHacerMientras(bool ejecutar) {
     pos++; // consume 'hacer'
 
     if (!esTipo(TipoToken::LLAVE_IZ))
-        throw std::runtime_error(error_falta_token("{", actual().linea));
+        throw std::runtime_error(error_falta_llave_izq(actual().linea));
     size_t posCuerpo = pos + 1;
     pos++; // consume '{'
 
@@ -878,7 +878,7 @@ void parseHacerMientras(bool ejecutar) {
     consumir(TipoToken::LLAVE_DE);
 
     if (!esTipo(TipoToken::MIENTRAS))
-        throw std::runtime_error(error_falta_token("mientras", actual().linea));
+        throw std::runtime_error(error_falta_palabra_mientras(actual().linea));
     int lineaMientras = actual().linea;
     pos++; // consume 'mientras'
 
@@ -1090,7 +1090,7 @@ void parseDefinicionFuncionConRetorno() {
             throw std::runtime_error(error_llave_abierta(nombreFuncTok.linea));
         consumir(TipoToken::LLAVE_DE);
     } else {
-        throw std::runtime_error(error_falta_token("{", nombreFuncTok.linea));
+        throw std::runtime_error(error_falta_llave_izq(nombreFuncTok.linea));
     }
 
     ObjetoFuncion nuevaFunc = {tipoRetorno, nombreFuncTok.valor, parametros, posCuerpo};

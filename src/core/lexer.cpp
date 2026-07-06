@@ -76,7 +76,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
                 if (fuente[i] == '\n') linea++;
                 cad += fuente[i]; i++;
             }
-            if (i >= fuente.size()) throw std::runtime_error(error_falta_token("\"", linea));
+            if (i >= fuente.size()) throw std::runtime_error(error_lexico_cadena_sin_cerrar(linea));
             i++;
             tokens.push_back({TipoToken::CADENA, cad, linea});
             continue;
@@ -86,7 +86,7 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         if (c == '\'') {
             std::string car = ""; i++;
             if (i < fuente.size() && fuente[i] != '\'') { car += fuente[i]; i++; }
-            if (i >= fuente.size() || fuente[i] != '\'') throw std::runtime_error(error_falta_token("'", linea));
+            if (i >= fuente.size() || fuente[i] != '\'') throw std::runtime_error(error_lexico_caracter_sin_cerrar(linea));
             i++;
             tokens.push_back({TipoToken::LITERAL_CARACTER, car, linea});
             continue;

@@ -24,19 +24,13 @@ struct Arreglo {
 
     std::string obtener(int idx, int linea) const {
         if (idx < 0 || idx >= tamano())
-            throw std::runtime_error("\n[ERROR SEMÁNTICO - Línea " + std::to_string(linea) +
-                                     "]\n  Índice " + std::to_string(idx) +
-                                     " fuera del rango del arreglo (tamaño " +
-                                     std::to_string(tamano()) + ").\n");
+            throw std::runtime_error(error_indice_fuera_rango(idx, tamano(), linea));
         return celdas[idx];
     }
 
     void asignar(int idx, const std::string& val, int linea) {
         if (idx < 0 || idx >= tamano())
-            throw std::runtime_error("\n[ERROR SEMÁNTICO - Línea " + std::to_string(linea) +
-                                     "]\n  Índice " + std::to_string(idx) +
-                                     " fuera del rango del arreglo (tamaño " +
-                                     std::to_string(tamano()) + ").\n");
+            throw std::runtime_error(error_indice_fuera_rango(idx, tamano(), linea));
         celdas[idx] = val;
     }
 };
