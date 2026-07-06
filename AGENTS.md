@@ -193,16 +193,17 @@ main()
 
 | Archivo | Líneas | Rol |
 |---|---|---|
-| `src/core/parser.cpp` | 1276 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook |
-| `src/gui/VentanaPrincipal.cpp` | 1190 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
-| `src/core/semantic.hpp` | 163 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
-| `src/core/lexer.cpp` | 188 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords) |
+| `src/core/parser.cpp` | 1311 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook, bugfix `parseSi` brace-skipping con `saltarBloqueLlaves` |
+| `src/gui/VentanaPrincipal.cpp` | 1238 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
+| `src/gui/syntax_highlighter.hpp` | 161 | Coloreado sintáctico header-only sin Q_OBJECT |
+| `src/core/semantic.hpp` | 169 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
+| `src/core/lexer.cpp` | 216 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords), escapes `\n`/`\t`/etc. |
 | `src/core/lexer.hpp` | 45 | Tipos de token (TipoToken enum, ~60 tokens) y estructura Token |
-| `src/core/errors.hpp` | 147 | Catálogo completo de mensajes de error/advertencia en español |
+| `src/core/errors.hpp` | 364 | Catálogo completo de mensajes de error/advertencia en español |
 | `src/core/eventos.hpp` | 43 | Contrato de eventos entre parser y GUI |
 | `src/core/preprocesador.cpp` | 42 | Resolución recursiva de `#incluir` |
 | `src/core/preprocesador.hpp` | 4 | Declaración de `preprocesarBibliotecas` |
-| `src/main.cpp` | 383 | Test runner con 30 pruebas (14 originales + 8 tipado + 8 features nuevas) |
+| `src/main.cpp` | 401 | Test runner con 31 pruebas + helpers |
 | `Makefile` | 80 | Build adaptativo con detección automática de Qt |
 
 Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del compilador (ej. `#include "core/lexer.hpp"`).
@@ -221,3 +222,5 @@ Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del co
 | `elegir`/`caso`/`defecto`, `parar` como break | 4c27a3f |
 | Tipado estricto (validar tipos en declaración/asignación/retorno/parámetros/arreglos) | Actual |
 | Fix `formatearNumero` para locale con coma decimal | Actual |
+| Syntax highlighting en el editor (keywords, strings, números, comentarios, directivas) | Actual |
+| Fix `parseSi` saltarBloqueLlaves: cuando `solicitudRetorno` estaba activo y se entraba a la rama `sino`, el `{...}` del cuerpo no se consumía y `consumir(FIN_SI)` encontraba `{` en vez de `fin_si` | Actual |

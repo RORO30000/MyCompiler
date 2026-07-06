@@ -1,4 +1,5 @@
 #include "gui/VentanaPrincipal.hpp"
+#include "gui/syntax_highlighter.hpp"
 #include "core/lexer.hpp"
 #include "core/eventos.hpp"
 #include <vector>
@@ -296,6 +297,8 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
         QString("QTextEdit { background:%1; color:%2; border:none; }")
         .arg(Pal::BG_EDITOR, Pal::TXT_MAIN)
     );
+
+    new SyntaxHighlighter(editorCodigo->document());
 
     // ── Botones ───────────────────────────────────────────────────
     botonEjecutar  = makeBtn("▶  Compilar",  Pal::ACCENT_BLUE,  Pal::H_BLUE,  this);

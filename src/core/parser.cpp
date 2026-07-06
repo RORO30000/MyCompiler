@@ -50,6 +50,17 @@ Token consumir(TipoToken esperado) {
 
 bool esTipo(TipoToken tipo) { return actual().tipo == tipo; }
 
+// ─── Saltar bloque { ... } por brace counting ────────────────────
+static void saltarBloqueLlaves() {
+    if (!esTipo(TipoToken::LLAVE_IZ)) return;
+    int depth = 1; pos++;
+    while (depth > 0 && !esTipo(TipoToken::FIN)) {
+        if (esTipo(TipoToken::LLAVE_IZ)) depth++;
+        if (esTipo(TipoToken::LLAVE_DE)) depth--;
+        if (depth > 0) pos++;
+    }
+}
+
 std::string tokenATipoTexto(TipoToken tipo) {
     if (tipo == TipoToken::ENTERO)      return "entero";
     if (tipo == TipoToken::DECIMAL)     return "decimal";
@@ -632,10 +643,14 @@ void parseSi(bool ejecutar) {
     bool saltado = ramaCierta;
 
     // Cuerpo de la rama si (o sino si)
-    while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-        parseSentencia(ramaCierta);
-        if (solicitudRetorno) break;
-        if (solicitudBreak || solicitudContinue) break;
+    if (solicitudRetorno || solicitudBreak || solicitudContinue) {
+        saltarBloqueLlaves();
+    } else {
+        while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+            parseSentencia(ramaCierta);
+            if (solicitudRetorno) break;
+            if (solicitudBreak || solicitudContinue) break;
+        }
     }
     // Si break/continue/retorno ocurrió dentro de {…}, saltar } restantes
     while (esTipo(TipoToken::LLAVE_DE)) pos++;
@@ -657,9 +672,13 @@ void parseSi(bool ejecutar) {
             bool ramaSinoSi = ejecutar && !saltado && (condSino == "verdadero");
             if (ramaSinoSi) saltado = true;
 
-            while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-                parseSentencia(ramaSinoSi);
-                if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
+            if (solicitudRetorno || solicitudBreak || solicitudContinue) {
+                saltarBloqueLlaves();
+            } else {
+                while (!esTipo(TipoToken::SINO) && !esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+                    parseSentencia(ramaSinoSi);
+                    if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
+                }
             }
             while (esTipo(TipoToken::LLAVE_DE)) pos++;
         } else {
@@ -667,9 +686,13 @@ void parseSi(bool ejecutar) {
             bool ramaFalsa = ejecutar && !saltado;
             saltado = true;
 
-            while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
-                parseSentencia(ramaFalsa);
-                if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
+            if (solicitudRetorno || solicitudBreak || solicitudContinue) {
+                saltarBloqueLlaves();
+            } else {
+                while (!esTipo(TipoToken::FIN_SI) && !esTipo(TipoToken::FIN)) {
+                    parseSentencia(ramaFalsa);
+                    if (solicitudRetorno || solicitudBreak || solicitudContinue) break;
+                }
             }
             while (esTipo(TipoToken::LLAVE_DE)) pos++;
             break;
@@ -1026,15 +1049,8 @@ void parseMostrar(bool ejecutar) {
     int linMostrar = actual().linea;
     pos++;
     consumir(TipoToken::PAREN_IZ);
-    std::string val;
-    if (esTipo(TipoToken::CADENA)) {
-        val = actual().valor;
-        if (ejecutar) std::cout << val << "\n";
-        pos++;
-    } else {
-        val = parseExpresion(ejecutar);
-        if (ejecutar) std::cout << val << "\n";
-    }
+    std::string val = parseExpresion(ejecutar);
+    if (ejecutar) std::cout << val << "\n";
     consumir(TipoToken::PAREN_DE);
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar)

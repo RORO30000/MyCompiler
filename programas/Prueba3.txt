@@ -1,0 +1,21 @@
+#incluir "matematica.txt"
+
+// Calcula factorial recursivamente
+entero factorial(entero n) {
+    si (n <= 1) {
+        retornar 1;
+    } sino {
+        retornar n * factorial(n - 1);
+    }
+fin_si
+}
+
+Principal() {
+    entero num = 5;
+    decimal pi = 3.1416;
+    booleano activo = verdadero;
+    caracter letra = 'A';
+    cadena saludo = "Hola\nMundo";
+    mostrar("El factorial de " + num + " es " + factorial(num));
+    // Comentario con números: 42 y más 3.14
+}
