@@ -37,6 +37,18 @@ static TipoToken palabraReservada(const std::string& palabra) {
     return TipoToken::VARIABLE;
 }
 
+// ─── Procesar secuencia de escape ──────────────────────────────────
+static std::string procesarEscape(const std::string& secuencia, int& linea) {
+    if (secuencia == "\\n")  { linea++; return "\n"; }
+    if (secuencia == "\\t")  return "\t";
+    if (secuencia == "\\\\") return "\\";
+    if (secuencia == "\\\"") return "\"";
+    if (secuencia == "\\'")  return "'";
+    if (secuencia == "\\r")  return "\r";
+    if (secuencia == "\\0")  return std::string(1, '\0');
+    return secuencia; // escape desconocido, se deja igual
+}
+
 std::vector<Token> tokenizar(const std::string& fuente) {
     std::vector<Token> tokens;
     int linea = 1;
@@ -73,8 +85,15 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         if (c == '"') {
             std::string cad = ""; i++;
             while (i < fuente.size() && fuente[i] != '"') {
-                if (fuente[i] == '\n') linea++;
-                cad += fuente[i]; i++;
+                if (fuente[i] == '\\' && i + 1 < fuente.size()) {
+                    std::string esc(1, fuente[i]);
+                    esc += fuente[i + 1];
+                    cad += procesarEscape(esc, linea);
+                    i += 2;
+                } else {
+                    if (fuente[i] == '\n') linea++;
+                    cad += fuente[i]; i++;
+                }
             }
             if (i >= fuente.size()) throw std::runtime_error(error_lexico_cadena_sin_cerrar(linea));
             i++;
@@ -85,7 +104,16 @@ std::vector<Token> tokenizar(const std::string& fuente) {
         // Caracteres individuales
         if (c == '\'') {
             std::string car = ""; i++;
-            if (i < fuente.size() && fuente[i] != '\'') { car += fuente[i]; i++; }
+            if (i < fuente.size() && fuente[i] != '\'') {
+                if (fuente[i] == '\\' && i + 1 < fuente.size()) {
+                    std::string esc(1, fuente[i]);
+                    esc += fuente[i + 1];
+                    car = procesarEscape(esc, linea);
+                    i += 2;
+                } else {
+                    car += fuente[i]; i++;
+                }
+            }
             if (i >= fuente.size() || fuente[i] != '\'') throw std::runtime_error(error_lexico_caracter_sin_cerrar(linea));
             i++;
             tokens.push_back({TipoToken::LITERAL_CARACTER, car, linea});

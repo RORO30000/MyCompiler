@@ -702,21 +702,24 @@ void parseMientras(bool ejecutar) {
     bool salir = false;
     while (cond == "verdadero" && maxIter-- > 0 && !salir) {
         pos = posCuerpo;
+        tabla.entrarAmbito();
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) {
             parseSentencia(true);
             if (solicitudRetorno)  { salir = true; break; }
             if (solicitudBreak)    { solicitudBreak = false; salir = true; break; }
             if (solicitudContinue) { solicitudContinue = false; break; }
         }
+        tabla.salirAmbito();
         if (salir) break;
 
+        size_t posFinCuerpo = pos;
         pos = posMientras + 1;
         consumir(TipoToken::PAREN_IZ);
         condBool = evaluarCondicionCompleta(true);
         cond = condBool ? "verdadero" : "falso";
         consumir(TipoToken::PAREN_DE);
         posCuerpo = pos;
-
+        if (!condBool) pos = posFinCuerpo;
         emitir({TipoEvento::BUCLE_CONDICION, lineaMientras, "", cond});
     }
 
@@ -817,12 +820,14 @@ void parsePara(bool ejecutar) {
         if (!condResult) break;
 
         // Cuerpo
+        tabla.entrarAmbito();
         while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN)) {
             parseSentencia(true);
             if (solicitudRetorno)  { salir = true; break; }
             if (solicitudBreak)    { solicitudBreak = false; salir = true; break; }
             if (solicitudContinue) { solicitudContinue = false; break; }
         }
+        tabla.salirAmbito();
         if (salir) break;
 
         // Incremento (sin ; al final, a diferencia de una sentencia normal)
@@ -908,6 +913,7 @@ void parseHacerMientras(bool ejecutar) {
     do {
         // Execute body
         pos = posCuerpo;
+        tabla.entrarAmbito();
         while (true) {
             if (esTipo(TipoToken::LLAVE_DE)) { pos++; break; }
             parseSentencia(true);
@@ -915,6 +921,7 @@ void parseHacerMientras(bool ejecutar) {
             if (solicitudBreak) { solicitudBreak = false; salir = true; break; }
             if (solicitudContinue) { solicitudContinue = false; break; }
         }
+        tabla.salirAmbito();
         if (salir) break;
 
         // Re-evaluate condition

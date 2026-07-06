@@ -121,6 +121,18 @@ public:
     }
 
     // ── Advertencias ─────────────────────────────────────────────
+    std::string debugAmbitos() const {
+        std::string r = "{";
+        for (auto& a : ambitos) {
+            r += " [";
+            for (auto& [k, v] : a)
+                r += k + ":" + v.tipo + "/" + v.valor + " ";
+            r += "]";
+        }
+        r += " }";
+        return r;
+    }
+
     void revisarNoUsadasEnAmbitoActual() {
         for (auto& [nombre, var] : ambitos.back())
             if (!var.usada) std::cout << advertencia_variable_no_usada(nombre);
