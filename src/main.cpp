@@ -379,5 +379,23 @@ int main() {
         "}\n";
     compilarYEjecutar("30. entero b = 1 + 10 (literales)", prueba_suma_literal);
 
+    // 31. Declaracion sin inicializacion
+    string prueba_sin_init =
+        "Principal() {\n"
+        "    entero a;\n"
+        "    decimal b;\n"
+        "    cadena c;\n"
+        "    booleano d;\n"
+        "    caracter e;\n"
+        "    mostrar(a);\n"
+        "    mostrar(b);\n"
+        "    mostrar(c);\n"
+        "    mostrar(d);\n"
+        "    mostrar(e);\n"
+        "    entero f = 42;\n"
+        "    mostrar(f);\n"
+        "}\n";
+    compilarYEjecutar("31. declaracion sin inicializacion", prueba_sin_init);
+
     return 0;
 }

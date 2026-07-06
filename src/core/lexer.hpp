@@ -40,6 +40,12 @@ inline std::string tipoATexto(TipoToken tipo) {
         case TipoToken::COMA:          return ",";
         case TipoToken::DOS_PUNTOS:    return ":";
         case TipoToken::IGUAL:         return "=";
+        case TipoToken::FIN_SI:        return "fin_si";
+        case TipoToken::FIN_MIENTRAS:  return "fin_mientras";
+        case TipoToken::FIN_PARA:      return "fin_para";
+        case TipoToken::ENTONCES:      return "entonces";
+        case TipoToken::SINO:          return "sino";
+        case TipoToken::MIENTRAS:      return "mientras";
         default:                       return "token";
     }
 }

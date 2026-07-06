@@ -414,8 +414,17 @@ bool evaluarCondicionCompleta(bool ejecutar) {
 void parseDeclaracion(bool ejecutar) {
     std::string tipoVar = tokenATipoTexto(actual().tipo); pos++;
     Token nombreTok = consumir(TipoToken::VARIABLE);
-    consumir(TipoToken::IGUAL);
-    std::string valor = parseExpresion(ejecutar);
+    std::string valor;
+    if (esTipo(TipoToken::IGUAL)) {
+        pos++;
+        valor = parseExpresion(ejecutar);
+    } else if (ejecutar) {
+        if      (tipoVar == "entero")   valor = "0";
+        else if (tipoVar == "decimal")  valor = "0";
+        else if (tipoVar == "booleano") valor = "falso";
+        else if (tipoVar == "caracter") valor = " ";
+        else                            valor = "";
+    }
     consumir(TipoToken::PUNTO_COMA);
     if (ejecutar) {
         validarTipo(tipoVar, valor, nombreTok.linea);
@@ -1258,13 +1267,16 @@ double parsear(std::vector<Token>& tokens, std::vector<EventoPaso>* cola) {
 
         Token tokParenIz; tokParenIz.tipo = TipoToken::PAREN_IZ; tokParenIz.valor = "("; tokParenIz.linea = 0;
         Token tokParenDe; tokParenDe.tipo = TipoToken::PAREN_DE; tokParenDe.valor = ")"; tokParenDe.linea = 0;
-        tokens.insert(tokens.begin() + (long)tokenFinal, tokParenDe);
-        tokens.insert(tokens.begin() + (long)tokenFinal, tokParenIz);
+        // Insertar al final (despues de FIN) para no desplazar tokens existentes
+        size_t insertPos = tkns->size();
+        tokens.insert(tokens.begin() + (long)insertPos, tokParenDe);
+        tokens.insert(tokens.begin() + (long)insertPos, tokParenIz);
+        pos = insertPos;
 
         ejecutarLlamadaFuncion("Principal", true);
 
-        tokens.erase(tokens.begin() + (long)tokenFinal,
-                     tokens.begin() + (long)tokenFinal + 2);
+        tokens.erase(tokens.begin() + (long)insertPos,
+                     tokens.begin() + (long)insertPos + 2);
         pos = tokenFinal;
     } else {
         std::cout << "[INFO]: No se encontró la rutina 'Principal()'. El programa finalizó de forma secuencial.\n";
