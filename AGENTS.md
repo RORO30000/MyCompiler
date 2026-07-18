@@ -21,21 +21,22 @@ La comunicación entre capas ocurre via:
 ```
 MyCompiler/
 ├── src/
-│   ├── main.cpp                 # Entry point consola (test runner, 31 pruebas)
+│   ├── main.cpp                 # Entry point consola (test runner, 42 pruebas)
 │   ├── main_gui.cpp             # Entry point GUI Qt
 │   ├── core/
 │   │   ├── lexer.hpp            # Token types (TipoToken enum, ~60 tokens), Token struct
 │   │   ├── lexer.cpp            # Analizador léxico (tokenizar)
-│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~1407 líneas)
+│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~1420 líneas)
 │   │   ├── semantic.hpp         # TablaVariables (scoped), TablaFunciones, Arreglo
-│   │   ├── errors.hpp           # Mensajes de error/warning/success en español
-│   │   ├── eventos.hpp          # TipoEvento enum, EventoPaso struct
+│   │   ├── errors.hpp           # Mensajes de error/warning/success en español (~380 líneas)
+│   │   ├── eventos.hpp          # TipoEvento enum (~25 tipos), EventoPaso struct
 │   │   ├── preprocesador.hpp    # Declaración de preprocesarBibliotecas (2 sobrecargas)
-│   │   └── preprocesador.cpp    # #incluir "archivo" → resolución recursiva + mapa líneas
+│   │   └── preprocesador.cpp    # #incluir "archivo" → resolución recursiva + mapa líneas (~80 líneas)
 │   └── gui/
-│       ├── VentanaPrincipal.hpp # VentanaPrincipal, CodeEditor, LineNumberArea
-│       ├── VentanaPrincipal.cpp # IDE gráfico completo (~1470 líneas)
-│       └── syntax_highlighter.hpp # Coloreado sintáctico header-only sin Q_OBJECT
+│       ├── VentanaPrincipal.hpp # VentanaPrincipal, CodeEditor, LineNumberArea (~168 líneas)
+│       ├── VentanaPrincipal.cpp # IDE gráfico completo (~1670 líneas)
+│       ├── syntax_highlighter.hpp # Coloreado sintáctico header-only sin Q_OBJECT
+│       └── theme.hpp            # Tema centralizado: ~50 colores como inline QString (mutable runtime)
 ├── librerias/                   # Biblioteca estándar para #incluir
 │   ├── matematica.txt           # Funciones matemáticas básicas
 │   ├── matematica_avanzada.txt  # Funciones numéricas adicionales
@@ -183,11 +184,15 @@ main()
 ```
 main()
   └─ VentanaPrincipal (QMainWindow)
-       ├─ Split horizontal: editor original | editor expandido
+       ├─ Split horizontal: editor original | panel de funciones de biblioteca
        ├─ botón "Compilar"
        │    └─ manejarEjecucion()
        │         ├─ preprocesarBibliotecas(src, expanded, mapaLineas)
-       │         ├─ Si hay #incluir → muestra editor expandido derecho
+       │         ├─ Si hay #incluir en src:
+       │         │   ├─ Extraer funciones de bibliotecas referenciadas (estático)
+       │         │   ├─ Construir vista solo-funciones (concatenación)
+       │         │   ├─ Construir mapa de líneas expanded→vista-librería
+       │         │   └─ Mostrar panel derecho con solo las funciones llamadas
        │         ├─ tokenizar(expanded)
        │         ├─ parsear(tokens, &pasos)   → llena cola de eventos
        │         │   └─ leer() → inputHook → QInputDialog (modal)
@@ -199,7 +204,10 @@ main()
        │    └─ retrocederPaso() → restaurarSnapshot()
        ├─ resaltarLinea() sincroniza ambos paneles
        │    ├─ Panel izquierdo: mapaLineas[lineaEvento] → línea original
-       │    └─ Panel derecho: lineaEvento directamente (expandido)
+       │    └─ Panel derecho:  mapaLineasLibreria[lineaEvento] → línea en vista solo-funciones
+       │         La flecha aparece solo cuando la línea activa está dentro de una
+       │         función de biblioteca; caso contrario el panel no muestra ninguna
+       │         flecha (solo las funciones leídas quedan visibles).
        └─ panel derecho de animación
             ├─ Tarjetas de variables (QGraphicsProxyWidget animado)
             └─ Vista de arreglo (celdas con índice activo)
@@ -238,19 +246,19 @@ cadena   repetir(cadena s, entero n)
 
 | Archivo | Líneas | Rol |
 |---|---|---|
-| `src/core/parser.cpp` | 1407 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook |
-| `src/gui/VentanaPrincipal.cpp` | 1472 | IDE completo: split editores, terminal emergente, animación, snapshots, navegación |
+| `src/core/parser.cpp` | 1417 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook |
+| `src/gui/VentanaPrincipal.cpp` | 1671 | IDE completo: split editores, terminal emergente, animación, snapshots, navegación |
 | `src/gui/syntax_highlighter.hpp` | 161 | Coloreado sintáctico header-only sin Q_OBJECT |
-| `src/gui/VentanaPrincipal.hpp` | 146 | VentanaPrincipal (QMainWindow), CodeEditor, LineNumberArea |
+| `src/gui/VentanaPrincipal.hpp` | 168 | VentanaPrincipal (QMainWindow), CodeEditor, LineNumberArea |
 | `src/core/semantic.hpp` | 210 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
 | `src/core/lexer.cpp` | 219 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords), escapes `\n`/`\t`/etc. |
 | `src/core/lexer.hpp` | 52 | Tipos de token (TipoToken enum, ~60 tokens) y estructura Token |
 | `src/core/errors.hpp` | 376 | Catálogo completo de mensajes de error/advertencia en español |
 | `src/core/eventos.hpp` | 45 | Contrato de eventos entre parser y GUI |
 | `src/main_gui.cpp` | 14 | Entry point GUI Qt |
-| `src/core/preprocesador.cpp` | 77 | Resolución recursiva de `#incluir` + generación de mapa línea-expandida→original. Busca en `./` y `librerias/`. |
+| `src/core/preprocesador.cpp` | 78 | Resolución recursiva de `#incluir` + generación de mapa línea-expandida→original. Busca en `./` y `librerias/`. |
 | `src/core/preprocesador.hpp` | 7 | Declaración de `preprocesarBibliotecas` (2 sobrecargas) |
-| `src/main.cpp` | 401 | Test runner con 31 pruebas + helpers |
+| `src/main.cpp` | 401 | Test runner con 42 pruebas + helpers |
 | `Makefile` | 80 | Build adaptativo con detección automática de Qt |
 | `librerias/matematica.txt` | 13 | Biblioteca de ejemplo (calcularPotencia, calcularCuadrado) |
 | `librerias/matematica_avanzada.txt` | 114 | Funciones matemáticas adicionales |
@@ -258,10 +266,35 @@ cadena   repetir(cadena s, entero n)
 
 Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del compilador (ej. `#include "core/lexer.hpp"`).
 
+## Split view inteligente (solo funciones de biblioteca)
+
+Cuando el código fuente contiene `#incluir`, el panel derecho muestra **únicamente las funciones de biblioteca que son invocadas** desde el programa principal, no el contenido completo de las librerías. Esto es un análisis estático: se examina el código expandido, se identifican qué funciones de bibliotecas se llaman, y se extraen solo sus cuerpos.
+
+### Flujo
+
+1. `preprocesarBibliotecas()` resuelve los `#incluir` y produce el código expandido (`expanded`) y el mapa de líneas expandida→original (`mapaLineas`).
+2. Se escanea `expanded` para detectar llamadas a funciones que pertenecen a bibliotecas (líneas donde `mapaLineas[k] == 0`).
+3. Se extrae el cuerpo de cada función de biblioteca invocada (manejando `{}` anidadas).
+4. Se construye una **vista solo-funciones**: concatenación de los cuerpos extraídos, separados por doble salto de línea.
+5. Se construye un **mapa de líneas expandida→vista-librería**: para cada línea de `expanded` que está dentro del cuerpo de una función de biblioteca, se calcula su línea correspondiente en la vista solo-funciones.
+
+### Seguimiento de flecha
+
+- Cuando la línea activa del evento (`ev.linea`) corresponde a código de biblioteca (`mapaLineas[ev.linea] == 0`), la flecha se muestra en el **panel derecho** (vista solo-funciones), en la línea correspondiente según el mapa `expanded→vista-librería`.
+- Cuando la línea activa corresponde a código del usuario (`mapaLineas[ev.linea] > 0`), la flecha se muestra en el **panel izquierdo** (editor original), y el panel derecho solo muestra las funciones (sin flecha).
+- Si no hay función de biblioteca activa en ese momento, el panel derecho no muestra ninguna flecha.
+
+### Consideraciones
+
+- El análisis es **estático**: todas las funciones llamadas en algún punto del programa se muestran desde el inicio.
+- Funciones de biblioteca que llaman a otras funciones de biblioteca: ambas se incluyen en la vista.
+- Múltiples llamadas a la misma función: la función aparece una sola vez en la vista.
+- Si una biblioteca no se encuentra (`#incluir "no_existe.txt"`): se muestra un aviso en la terminal y la línea se agrega como comentario en el código expandido, pero no genera entrada en la vista solo-funciones (no hay función que extraer).
+
 ## Historial de features
 
 | Feature | Commit/Añadido |
-|---|---|
+|---|---|---|
 | si/sino/sino si/fin_si, mientras, para, ++/--, +=/-=/*= | Original |
 | Tipo `cadena`, `booleano`, `caracter` | Original |
 | Funciones con retorno estilo C++ | Original |
@@ -283,3 +316,8 @@ Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del co
 | Preprocesador: búsqueda automática en `./` y `librerias/` | Última sesión |
 | Biblioteca `matematica.txt` migrada a sintaxis actual | Última sesión |
 | Nuevas bibliotecas: `matematica_avanzada.txt`, `texto.txt` | Última sesión |
+| Tema centralizado: `theme.hpp` con ~50 colores, toggle oscuro/claro, namespace `Theme` con `setDark()`/`setLight()` | Pendiente |
+| Barra de menú funcional: Undo/Redo/Copy/Paste/Cut/SelectAll, atajos, toggle tema, aumentar/reducir fuente, Acerca de | Pendiente |
+| Eventos nuevos: `ELEGIR_CASO`, `ROMPER`, `CONTINUAR` en parser y GUI | Pendiente |
+| Warning por `#incluir` de biblioteca no encontrada (no interrumpe compilación) | Pendiente |
+| Panel derecho inteligente: muestra SOLO las funciones de biblioteca invocadas (estático), con mapa de líneas expanded→vista-librería y seguimiento de flecha | Pendiente |

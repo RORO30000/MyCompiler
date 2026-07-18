@@ -362,6 +362,13 @@ inline std::string advertencia_variable_sombreada(const std::string& nombre, int
            "  de un ámbito exterior. Considera usar otro nombre.\n";
 }
 
+inline std::string advertencia_biblioteca_no_encontrada(const std::string& nombre, int linea) {
+    return "\n[AVISO - Línea " + std::to_string(linea) + "]\n"
+           "  La biblioteca '" + nombre + "' no se encontró.\n"
+           "  La línea #incluir será ignorada. Si el programa usa funciones de esta\n"
+           "  biblioteca, la compilación fallará más adelante.\n";
+}
+
 
 // ══════════════════════════════════════════════════════════════════════
 //  MENSAJES DE ÉXITO

@@ -4,6 +4,7 @@
 #include <regex>
 #include <stdexcept>
 #include <vector>
+#include <iostream>
 #include "core/preprocesador.hpp"
 #include "core/errors.hpp"
 
@@ -44,7 +45,11 @@ void preprocesarBibliotecas(const std::string& codigoFuente,
                 if (archivoBiblioteca.is_open()) break;
             }
             if (!archivoBiblioteca.is_open()) {
-                throw std::runtime_error(error_archivo_no_encontrado(nombreArchivo, numeroLinea));
+                std::cout << advertencia_biblioteca_no_encontrada(nombreArchivo, numeroLinea);
+                resultado += "// #incluir \"" + nombreArchivo + "\"  [AVISO: archivo no encontrado]\n";
+                mapaExpToOrig.push_back(numeroLinea);
+                numeroLinea++;
+                continue;
             }
 
             std::stringstream contenidoBiblioteca;

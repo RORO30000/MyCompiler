@@ -25,6 +25,7 @@
 #include <QMessageBox>
 #include <QDateTime>
 #include <QApplication>
+#include "gui/theme.hpp"
 
 // ── Prototipos externos ───────────────────────────────────────────
 std::vector<Token>  tokenizar(const std::string&);
@@ -34,32 +35,10 @@ void                preprocesarBibliotecas(const std::string&, std::string&, std
 void                setInputHook(std::string (*hook)());
 
 // ═════════════════════════════════════════════════════════════════
-//  Paleta de colores centralizada
-// ═════════════════════════════════════════════════════════════════
-namespace Pal {
-    static const char* BG_APP      = "#1e1e1e";
-    static const char* BG_EDITOR   = "#1e1e1e";
-    static const char* BG_PANEL    = "#252526";
-    static const char* BG_GUTTER   = "#2d2d30";
-    static const char* BG_MENUBAR  = "#2d2d30";
-
-    static const char* ACCENT_BLUE  = "#007acc";
-    static const char* ACCENT_GREEN = "#16a34a";
-    static const char* ACCENT_GRAY  = "#4b5563";
-
-    static const char* H_BLUE  = "#1d4ed8";
-    static const char* H_GREEN = "#15803d";
-    static const char* H_GRAY  = "#6b7280";
-
-    static const char* TXT_MAIN = "#d4d4d4";
-    static const char* TXT_DIM  = "#9ca3af";
-}
-
-// ═════════════════════════════════════════════════════════════════
 //  Helper: crear botón con estilo unificado
 // ═════════════════════════════════════════════════════════════════
 static QPushButton* makeBtn(const QString& label,
-                             const char* bg, const char* hover,
+                             const QString& bg, const QString& hover,
                              QWidget* parent = nullptr)
 {
     auto* b = new QPushButton(label, parent);
@@ -67,15 +46,15 @@ static QPushButton* makeBtn(const QString& label,
     b->setCursor(Qt::PointingHandCursor);
     b->setStyleSheet(
         QString(
-        "QPushButton {"
-        "  background:%1; color:#f0f0f0;"
+        "QPushButton { background:%1; color:%2;"
         "  font-family:'Segoe UI',sans-serif; font-size:12px; font-weight:600;"
         "  border:none; border-radius:4px; padding:0 14px;"
         "}"
-        "QPushButton:hover  { background:%2; }"
-        "QPushButton:pressed{ background:%2; opacity:0.85; }"
-        "QPushButton:disabled{ background:#2d2d2d; color:#555; border:1px solid #3a3a3a; }"
-        ).arg(bg, hover)
+        "QPushButton:hover  { background:%3; }"
+        "QPushButton:pressed{ background:%3; opacity:0.85; }"
+        "QPushButton:disabled{ background:%4; color:%5; border:1px solid %6; }"
+        ).arg(bg, Theme::TXT_BTN, hover,
+              Theme::BG_DISABLED, Theme::TXT_DISABLED, Theme::BORDER_MUTED)
     );
     return b;
 }
@@ -128,10 +107,10 @@ int LineNumberArea::gutterWidth() {
 
 void LineNumberArea::paintEvent(QPaintEvent* ev) {
     QPainter p(this);
-    p.fillRect(ev->rect(), QColor(Pal::BG_GUTTER));
+    p.fillRect(ev->rect(), QColor(Theme::BG_GUTTER));
 
     // línea separadora derecha
-    p.setPen(QColor("#3a3a3a"));
+    p.setPen(QColor(Theme::BORDER_MUTED));
     p.drawLine(width()-1, ev->rect().top(), width()-1, ev->rect().bottom());
 
     QFont f = _ed->font();
@@ -148,7 +127,7 @@ void LineNumberArea::paintEvent(QPaintEvent* ev) {
         int h   = (int)br.height();
 
         if (top + h >= ev->rect().top() && top <= ev->rect().bottom()) {
-            p.setPen(QColor(Pal::TXT_DIM));
+            p.setPen(QColor(Theme::TXT_DIM));
             p.drawText(0, top, width()-6, h,
                        Qt::AlignRight | Qt::AlignTop,
                        QString::number(num));
@@ -166,7 +145,7 @@ void LineNumberArea::paintEvent(QPaintEvent* ev) {
         path.lineTo(arrowX,     _punteroY + 12);
         path.closeSubpath();
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor("#22c55e"));
+        p.setBrush(QColor(Theme::GUTTER_ARROW));
         p.setRenderHint(QPainter::Antialiasing);
         p.drawPath(path);
     }
@@ -290,19 +269,21 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 {
     setWindowTitle("MyCompiler — Visualizador Paso a Paso");
     resize(1300, 800);
-    setStyleSheet(QString("QMainWindow { background:%1; }").arg(Pal::BG_APP));
+    setStyleSheet(QString("QMainWindow { background:%1; }").arg(Theme::BG_APP));
 
 
     // ── Barra de menú ─────────────────────────────────────────────
     QMenuBar* mb = menuBar();
     mb->setStyleSheet(
         QString("QMenuBar { background:%1; color:%2; font-size:12px;"
-                "           border-bottom:1px solid #3a3a3a; padding:1px 4px; }"
+                "           border-bottom:1px solid %3; padding:1px 4px; }"
                 "QMenuBar::item { padding:3px 10px; border-radius:3px; }"
-                "QMenuBar::item:selected { background:#3a3a3a; }"
-                "QMenu { background:#2d2d2d; color:%2; border:1px solid #444; }"
-                "QMenu::item:selected { background:#3b82f6; }")
-        .arg(Pal::BG_MENUBAR, Pal::TXT_MAIN)
+                "QMenuBar::item:selected { background:%3; }"
+                "QMenu { background:%4; color:%2; border:1px solid %5; }"
+                "QMenu::item:selected { background:%6; }")
+        .arg(Theme::BG_MENUBAR, Theme::TXT_MAIN,
+             Theme::BORDER_MUTED, Theme::BG_MENU,
+             Theme::BORDER_DIM, Theme::ACCENT_BORDER)
     );
     QMenu* mArchivo = mb->addMenu("Archivo");
     QMenu* mEditar  = mb->addMenu("Editar");
@@ -320,21 +301,57 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     connect(actGuard,  &QAction::triggered, this, &VentanaPrincipal::guardarArchivo);
     connect(actGuardC, &QAction::triggered, this, &VentanaPrincipal::guardarComoArchivo);
     connect(actSalir,  &QAction::triggered, this, &VentanaPrincipal::salirAplicacion);
-    mEditar->addAction("Deshacer")->setEnabled(false);
-    mEditar->addAction("Rehacer")->setEnabled(false);
+
+    QAction* actUndo = mEditar->addAction("Deshacer");
+    actUndo->setShortcut(QKeySequence::Undo);
+    connect(actUndo, &QAction::triggered, this, [this]{ editorCodigo->undo(); });
+
+    QAction* actRedo = mEditar->addAction("Rehacer");
+    actRedo->setShortcut(QKeySequence::Redo);
+    connect(actRedo, &QAction::triggered, this, [this]{ editorCodigo->redo(); });
+
     mEditar->addSeparator();
-    mEditar->addAction("Copiar")->setEnabled(false);
-    mEditar->addAction("Pegar")->setEnabled(false);
-    mVista->addAction("Tema oscuro")->setEnabled(false);
-    mVista->addAction("Aumentar fuente")->setEnabled(false);
-    mVista->addAction("Reducir fuente")->setEnabled(false);
-    mAyuda->addAction("Acerca de MyCompiler")->setEnabled(false);
+
+    QAction* actCut = mEditar->addAction("Cortar");
+    actCut->setShortcut(QKeySequence::Cut);
+    connect(actCut, &QAction::triggered, this, [this]{ editorCodigo->cut(); });
+
+    QAction* actCopy = mEditar->addAction("Copiar");
+    actCopy->setShortcut(QKeySequence::Copy);
+    connect(actCopy, &QAction::triggered, this, [this]{ editorCodigo->copy(); });
+
+    QAction* actPaste = mEditar->addAction("Pegar");
+    actPaste->setShortcut(QKeySequence::Paste);
+    connect(actPaste, &QAction::triggered, this, [this]{ editorCodigo->paste(); });
+
+    QAction* actSelAll = mEditar->addAction("Seleccionar todo");
+    actSelAll->setShortcut(QKeySequence::SelectAll);
+    connect(actSelAll, &QAction::triggered, this, [this]{ editorCodigo->selectAll(); });
+
+    QAction* actTheme = mVista->addAction("Tema oscuro");
+    actTheme->setCheckable(true);
+    actTheme->setChecked(true);
+    connect(actTheme, &QAction::triggered, this, [this, actTheme]{
+        toggleTheme();
+        actTheme->setText(_temaOscuro ? "Tema oscuro" : "Tema claro");
+    });
+
+    QAction* actFontUp = mVista->addAction("Aumentar fuente");
+    actFontUp->setShortcut(QKeySequence::ZoomIn);
+    connect(actFontUp, &QAction::triggered, this, &VentanaPrincipal::aumentarFuente);
+
+    QAction* actFontDown = mVista->addAction("Reducir fuente");
+    actFontDown->setShortcut(QKeySequence::ZoomOut);
+    connect(actFontDown, &QAction::triggered, this, &VentanaPrincipal::reducirFuente);
+
+    QAction* actAbout = mAyuda->addAction("Acerca de MyCompiler");
+    connect(actAbout, &QAction::triggered, this, &VentanaPrincipal::acercaDe);
 
     // ── Barra de estado ───────────────────────────────────────────
     statusBar()->setStyleSheet(
         QString("QStatusBar { background:%1; color:%2; font-size:11px; "
-                "border-top:1px solid #333; }")
-        .arg(Pal::BG_MENUBAR, Pal::TXT_DIM)
+                "border-top:1px solid %3; }")
+        .arg(Theme::BG_MENUBAR, Theme::TXT_DIM, Theme::BORDER_SUBTLE)
     );
     statusBar()->showMessage("Listo.");
 
@@ -346,10 +363,10 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     editorCodigo->setFont(fe);
     editorCodigo->setStyleSheet(
         QString("QTextEdit { background:%1; color:%2; border:none; }")
-        .arg(Pal::BG_EDITOR, Pal::TXT_MAIN)
+        .arg(Theme::BG_EDITOR, Theme::TXT_MAIN)
     );
 
-    new SyntaxHighlighter(editorCodigo->document());
+    _hlCodigo = new SyntaxHighlighter(editorCodigo->document());
 
     // ── Editor expandido (lado derecho, read-only, oculto) ───────
     editorExpandido = new CodeEditor(this);
@@ -357,19 +374,19 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     editorExpandido->setFont(fe);
     editorExpandido->setStyleSheet(
         QString("QTextEdit { background:%1; color:%2; border:none;"
-                "border-left:2px solid #3b82f6; }")
-        .arg(Pal::BG_EDITOR, Pal::TXT_DIM)
+                "border-left:2px solid %3; }")
+        .arg(Theme::BG_EDITOR, Theme::TXT_DIM, Theme::ACCENT_BORDER)
     );
     editorExpandido->setPlaceholderText("El código expandido aparecerá aquí al compilar...");
     editorExpandido->hide();
-    new SyntaxHighlighter(editorExpandido->document());
+    _hlExpandido = new SyntaxHighlighter(editorExpandido->document());
 
     // ── Botones ───────────────────────────────────────────────────
-    botonEjecutar  = makeBtn("▶  Compilar",  Pal::ACCENT_BLUE,  Pal::H_BLUE,  this);
-    botonAnterior  = makeBtn("◀  Anterior",  Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
-    botonSiguiente = makeBtn("Siguiente  ▶", Pal::ACCENT_GREEN, Pal::H_GREEN, this);
-    botonPlay      = makeBtn("▶ Play",       Pal::ACCENT_GREEN, Pal::H_GREEN, this);
-    botonStop      = makeBtn("■ Stop",       Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
+    botonEjecutar  = makeBtn("▶  Compilar",  Theme::ACCENT_BLUE,  Theme::H_BLUE,  this);
+    botonAnterior  = makeBtn("◀  Anterior",  Theme::ACCENT_GRAY,  Theme::H_GRAY,  this);
+    botonSiguiente = makeBtn("Siguiente  ▶", Theme::ACCENT_GREEN, Theme::H_GREEN, this);
+    botonPlay      = makeBtn("▶ Play",       Theme::ACCENT_GREEN, Theme::H_GREEN, this);
+    botonStop      = makeBtn("■ Stop",       Theme::ACCENT_GRAY,  Theme::H_GRAY,  this);
     botonPlay->setCheckable(true);
 
     // Combos
@@ -404,15 +421,16 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     sliderVelocidad->setValue(3);
     sliderVelocidad->setFixedWidth(100);
     sliderVelocidad->setStyleSheet(
-        "QSlider::groove:horizontal { height:4px; background:#444; border-radius:2px; }"
-        "QSlider::handle:horizontal { background:#38bdf8; width:14px; height:14px;"
+        QString("QSlider::groove:horizontal { height:4px; background:%1; border-radius:2px; }"
+        "QSlider::handle:horizontal { background:%2; width:14px; height:14px;"
         "  margin:-5px 0; border-radius:7px; }"
-        "QSlider::sub-page:horizontal { background:#38bdf8; border-radius:2px; }");
+        "QSlider::sub-page:horizontal { background:%2; border-radius:2px; }")
+        .arg(Theme::BORDER_DIM, Theme::ACCENT_CYAN));
     sliderVelocidad->setEnabled(false);
 
     etiquetaVelocidad = new QLabel("lento", this);
     etiquetaVelocidad->setStyleSheet(
-        QString("QLabel { color:%1; font-size:10px; padding:0 4px; }").arg(Pal::TXT_DIM));
+        QString("QLabel { color:%1; font-size:10px; padding:0 4px; }").arg(Theme::TXT_DIM));
 
     // ── Timer para auto-play ──────────────────────────────────────
     timerAutoPlay = new QTimer(this);
@@ -420,12 +438,12 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 
     etiquetaPaso = new QLabel("—", this);
     etiquetaPaso->setStyleSheet(
-        QString("QLabel { color:%1; font-size:11px; padding:0 8px; }").arg(Pal::TXT_DIM));
+        QString("QLabel { color:%1; font-size:11px; padding:0 8px; }").arg(Theme::TXT_DIM));
 
     // ── Panel derecho de animación ────────────────────────────────
     panelAnimacion = new QWidget(this);
     panelAnimacion->setStyleSheet(
-        QString("QWidget { background:%1; }").arg(Pal::BG_PANEL));
+        QString("QWidget { background:%1; }").arg(Theme::BG_PANEL));
 
     QVBoxLayout* layPanel = new QVBoxLayout(panelAnimacion);
     layPanel->setContentsMargins(12, 12, 12, 12);
@@ -434,14 +452,16 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     // — Sección variables —
     tituloVariables = new QLabel("📦  Variables en memoria", panelAnimacion);
     tituloVariables->setStyleSheet(
-        "QLabel { color:#818cf8; font-weight:700; font-size:12px; background:transparent; }");
+        QString("QLabel { color:%1; font-weight:700; font-size:12px; background:transparent; }")
+        .arg(Theme::ACCENT_PURPLE));
     layPanel->addWidget(tituloVariables);
 
     QScrollArea* scVars = new QScrollArea(panelAnimacion);
     scVars->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scVars->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scVars->setFixedHeight(98);
-    scVars->setStyleSheet("QScrollArea { border:1px solid #2a2a3e; border-radius:4px;"
+    scVars->setStyleSheet(QString("QScrollArea { border:1px solid %1; border-radius:4px;")
+                          .arg(Theme::BORDER_PANEL) +
                           "background:transparent; }");
     scVars->setWidgetResizable(true);
 
@@ -457,13 +477,14 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     // separador
     QFrame* sep = new QFrame(panelAnimacion);
     sep->setFrameShape(QFrame::HLine);
-    sep->setStyleSheet("color:#2a2a3e;");
+    sep->setStyleSheet(QString("color:%1;").arg(Theme::BORDER_PANEL));
     layPanel->addWidget(sep);
 
     // — Sección arreglo —
     tituloArreglo = new QLabel("🗂  Arreglo", panelAnimacion);
     tituloArreglo->setStyleSheet(
-        "QLabel { color:#fbbf24; font-weight:700; font-size:12px; background:transparent; }");
+        QString("QLabel { color:%1; font-weight:700; font-size:12px; background:transparent; }")
+        .arg(Theme::ACCENT_AMBER));
     tituloArreglo->setVisible(false);
     layPanel->addWidget(tituloArreglo);
 
@@ -471,7 +492,8 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     scArr->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scArr->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scArr->setFixedHeight(98);
-    scArr->setStyleSheet("QScrollArea { border:1px solid #2a2a3e; border-radius:4px;"
+    scArr->setStyleSheet(QString("QScrollArea { border:1px solid %1; border-radius:4px;")
+                         .arg(Theme::BORDER_PANEL) +
                          "background:transparent; }");
     scArr->setWidgetResizable(true);
     scArr->setVisible(false);
@@ -491,8 +513,9 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     etiquetaEstado->setWordWrap(true);
     etiquetaEstado->setVisible(false);
     etiquetaEstado->setStyleSheet(
-        "QLabel { color:#86efac; background:#052e16; border:1px solid #166534;"
-        "border-radius:4px; padding:5px 8px; font-size:11px; }");
+        QString("QLabel { color:%1; background:%2; border:1px solid %3;"
+        "border-radius:4px; padding:5px 8px; font-size:11px; }")
+        .arg(Theme::TXT_SUCCESS, Theme::BG_SUCCESS, Theme::BORDER_SUCCESS));
     layPanel->addWidget(etiquetaEstado);
 
     layPanel->addStretch();
@@ -506,11 +529,12 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     layMain->setSpacing(4);
 
     // — Barra de herramientas (toolbar row) —
-    QWidget* toolbar = new QWidget(this);
-    toolbar->setFixedHeight(36);
-    toolbar->setStyleSheet(
-        "QWidget { background:#252526; border-bottom:1px solid #333; border-radius:0; }");
-    QHBoxLayout* layToolbar = new QHBoxLayout(toolbar);
+    _toolbar = new QWidget(this);
+    _toolbar->setFixedHeight(36);
+    _toolbar->setStyleSheet(
+        QString("QWidget { background:%1; border-bottom:1px solid %2; border-radius:0; }")
+        .arg(Theme::BG_TOOLBAR, Theme::BORDER_SUBTLE));
+    QHBoxLayout* layToolbar = new QHBoxLayout(_toolbar);
     layToolbar->setContentsMargins(8, 4, 8, 4);
     layToolbar->setSpacing(6);
     
@@ -520,9 +544,9 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     layToolbar->addSpacing(10);
 
     // separador visual entre compilar y navegación
-    QFrame* sepBtn = new QFrame(toolbar);
+    QFrame* sepBtn = new QFrame(_toolbar);
     sepBtn->setFrameShape(QFrame::VLine);
-    sepBtn->setStyleSheet("QFrame { color:#444; }");
+    sepBtn->setStyleSheet(QString("QFrame { color:%1; }").arg(Theme::BORDER_DIM));
     layToolbar->addWidget(sepBtn);
     layToolbar->addSpacing(4);
 
@@ -537,13 +561,13 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     layToolbar->addWidget(sliderVelocidad);
     layToolbar->addWidget(etiquetaVelocidad);
     layToolbar->addStretch();
-    layMain->addWidget(toolbar);
+    layMain->addWidget(_toolbar);
 
     // — Splitter horizontal: izquierda (editor+consola) / derecha (panel) —
     QSplitter* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setHandleWidth(4);
     splitter->setStyleSheet(
-        "QSplitter::handle { background:#333; }");
+        QString("QSplitter::handle { background:%1; }").arg(Theme::BORDER_SUBTLE));
 
     // lado izquierdo: splitter con editor original + expandido
     QWidget* ladoIzq = new QWidget();
@@ -554,7 +578,8 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 
     splitterEditores = new QSplitter(Qt::Horizontal, ladoIzq);
     splitterEditores->setHandleWidth(4);
-    splitterEditores->setStyleSheet("QSplitter::handle { background:#333; }");
+    splitterEditores->setStyleSheet(
+        QString("QSplitter::handle { background:%1; }").arg(Theme::BORDER_SUBTLE));
     splitterEditores->addWidget(editorCodigo);
     splitterEditores->addWidget(editorExpandido);
     splitterEditores->setSizes({680, 0});
@@ -585,6 +610,144 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 }
 
 // ═════════════════════════════════════════════════════════════════
+//  reestilarTodo — re-aplica todos los estilos visuales
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::reestilarTodo() {
+    // Ventana principal
+    setStyleSheet(QString("QMainWindow { background:%1; }").arg(Theme::BG_APP));
+
+    // Barra de menú
+    menuBar()->setStyleSheet(
+        QString("QMenuBar { background:%1; color:%2; font-size:12px;"
+                "           border-bottom:1px solid %3; padding:1px 4px; }"
+                "QMenuBar::item { padding:3px 10px; border-radius:3px; }"
+                "QMenuBar::item:selected { background:%3; }"
+                "QMenu { background:%4; color:%2; border:1px solid %5; }"
+                "QMenu::item:selected { background:%6; }")
+        .arg(Theme::BG_MENUBAR, Theme::TXT_MAIN,
+             Theme::BORDER_MUTED, Theme::BG_MENU,
+             Theme::BORDER_DIM, Theme::ACCENT_BORDER)
+    );
+
+    // Barra de estado
+    statusBar()->setStyleSheet(
+        QString("QStatusBar { background:%1; color:%2; font-size:11px; "
+                "border-top:1px solid %3; }")
+        .arg(Theme::BG_MENUBAR, Theme::TXT_DIM, Theme::BORDER_SUBTLE)
+    );
+
+    // Editores
+    editorCodigo->setStyleSheet(
+        QString("QTextEdit { background:%1; color:%2; border:none; }")
+        .arg(Theme::BG_EDITOR, Theme::TXT_MAIN)
+    );
+    editorExpandido->setStyleSheet(
+        QString("QTextEdit { background:%1; color:%2; border:none;"
+                "border-left:2px solid %3; }")
+        .arg(Theme::BG_EDITOR, Theme::TXT_DIM, Theme::ACCENT_BORDER)
+    );
+
+    // Toolbar
+    if (_toolbar) {
+        _toolbar->setStyleSheet(
+            QString("QWidget { background:%1; border-bottom:1px solid %2; border-radius:0; }")
+            .arg(Theme::BG_TOOLBAR, Theme::BORDER_SUBTLE));
+    }
+
+    // Panel derecho
+    panelAnimacion->setStyleSheet(
+        QString("QWidget { background:%1; }").arg(Theme::BG_PANEL));
+
+    // Speed slider
+    sliderVelocidad->setStyleSheet(
+        QString("QSlider::groove:horizontal { height:4px; background:%1; border-radius:2px; }"
+                "QSlider::handle:horizontal { background:%2; width:14px; height:14px;"
+                "  margin:-5px 0; border-radius:7px; }"
+                "QSlider::sub-page:horizontal { background:%2; border-radius:2px; }")
+        .arg(Theme::BORDER_DIM, Theme::ACCENT_CYAN));
+
+    // Etiquetas
+    etiquetaVelocidad->setStyleSheet(
+        QString("QLabel { color:%1; font-size:10px; padding:0 4px; }").arg(Theme::TXT_DIM));
+    etiquetaPaso->setStyleSheet(
+        QString("QLabel { color:%1; font-size:11px; padding:0 8px; }").arg(Theme::TXT_DIM));
+
+    // Títulos de sección
+    tituloVariables->setStyleSheet(
+        QString("QLabel { color:%1; font-weight:700; font-size:12px; background:transparent; }")
+        .arg(Theme::ACCENT_PURPLE));
+    tituloArreglo->setStyleSheet(
+        QString("QLabel { color:%1; font-weight:700; font-size:12px; background:transparent; }")
+        .arg(Theme::ACCENT_AMBER));
+
+    // Etiqueta de estado (solo si hay mensaje activo)
+    if (!estadoActual.mensajeEstado.empty())
+        setMensajeEstado(estadoActual.mensajeEstado, estadoActual.mensajeError);
+    else
+        etiquetaEstado->setVisible(false);
+
+    // Splitter handles
+    auto splitters = findChildren<QSplitter*>();
+    for (auto* s : splitters) {
+        s->setStyleSheet(
+            QString("QSplitter::handle { background:%1; }").arg(Theme::BORDER_SUBTLE));
+    }
+
+    // Recrear syntax highlighters para que usen los colores del tema actual
+    delete _hlCodigo;
+    delete _hlExpandido;
+    _hlCodigo    = new SyntaxHighlighter(editorCodigo->document());
+    _hlExpandido = new SyntaxHighlighter(editorExpandido->document());
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  toggleTheme — alterna entre tema oscuro y claro
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::toggleTheme() {
+    _temaOscuro = !_temaOscuro;
+    if (_temaOscuro)
+        Theme::setDark();
+    else
+        Theme::setLight();
+    reestilarTodo();
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  Fuente
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::aumentarFuente() {
+    QFont f = editorCodigo->font();
+    if (f.pointSize() < 28) {
+        f.setPointSize(f.pointSize() + 1);
+        editorCodigo->setFont(f);
+        editorExpandido->setFont(f);
+    }
+}
+
+void VentanaPrincipal::reducirFuente() {
+    QFont f = editorCodigo->font();
+    if (f.pointSize() > 8) {
+        f.setPointSize(f.pointSize() - 1);
+        editorCodigo->setFont(f);
+        editorExpandido->setFont(f);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  Acerca de
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::acercaDe() {
+    QMessageBox::about(this, "Acerca de MyCompiler",
+        "<h2>MyCompiler</h2>"
+        "<p>Compilador e intérprete educativo con sintaxis en español.</p>"
+        "<p>Versión 1.0</p>"
+        "<hr>"
+        "<p>Creado por <b>Jose Chullo</b> y <b>Rodrigo Ramos</b></p>"
+        "<p>Licencia MIT</p>"
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════
 //  Terminal emergente
 // ═════════════════════════════════════════════════════════════════
 void VentanaPrincipal::mostrarTerminal(const std::string& contenido) {
@@ -604,30 +767,33 @@ void VentanaPrincipal::mostrarTerminal(const std::string& contenido) {
     output->setFont(f);
     output->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     output->setStyleSheet(
-        "QTextEdit {"
-        "  background:#0d1117; color:#e6edf3;"
+        QString("QTextEdit {"
+        "  background:%1; color:%2;"
         "  border:none; padding:12px;"
-        "  selection-background-color:#264f78;"
+        "  selection-background-color:%3;"
         "}"
         "QScrollBar:vertical {"
-        "  background:#0d1117; width:10px;"
+        "  background:%1; width:10px;"
         "}"
         "QScrollBar::handle:vertical {"
-        "  background:#30363d; border-radius:5px; min-height:20px;"
+        "  background:%4; border-radius:5px; min-height:20px;"
         "}"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
         "  height:0;"
-        "}"
+        "}")
+        .arg(Theme::BG_TERM, Theme::TXT_TERM, Theme::TERM_SEL, Theme::TERM_SCROLL)
     );
     output->setHtml(
         QString("<pre style='font-family:\"Courier New\",monospace;"
-                "margin:0; white-space:pre-wrap; color:#e6edf3;'>%1</pre>")
-        .arg(QString::fromStdString(contenido))
+                "margin:0; white-space:pre-wrap; color:%1;'>%2</pre>")
+        .arg(Theme::TXT_TERM, QString::fromStdString(contenido))
     );
 
     auto* barra = new QWidget(term);
     barra->setFixedHeight(36);
-    barra->setStyleSheet("background:#161b22; border-top:1px solid #30363d;");
+    barra->setStyleSheet(
+        QString("background:%1; border-top:1px solid %2;")
+        .arg(Theme::BG_TERM_BAR, Theme::TERM_SCROLL));
     auto* layBarra = new QHBoxLayout(barra);
     layBarra->setContentsMargins(8, 4, 8, 4);
 
@@ -635,11 +801,11 @@ void VentanaPrincipal::mostrarTerminal(const std::string& contenido) {
     btnCerrar->setFixedHeight(26);
     btnCerrar->setCursor(Qt::PointingHandCursor);
     btnCerrar->setStyleSheet(
-        "QPushButton {"
-        "  background:#238636; color:#fff; font-weight:600; font-size:12px;"
+        QString("QPushButton { background:%1; color:#fff; font-weight:600; font-size:12px;"
         "  border:none; border-radius:4px; padding:0 18px;"
         "}"
-        "QPushButton:hover { background:#2ea043; }"
+        "QPushButton:hover { background:%2; }")
+        .arg(Theme::TERM_BTN, Theme::TERM_BTN_HOVER)
     );
     connect(btnCerrar, &QPushButton::clicked, term, &QDialog::close);
 
@@ -943,18 +1109,19 @@ void VentanaPrincipal::manejarEjecucion() {
         std::string expanded;
         mapaLineas.clear();
         preprocesarBibliotecas(src, expanded, mapaLineas);
-        // Mostrar código expandido en el panel derecho
-        bool hayInclude = false;
-        for (int v : mapaLineas) { if (v == 0) { hayInclude = true; break; } }
-        if (hayInclude && !editorExpandido->isVisible()) {
-            editorExpandido->show();
-            splitterEditores->setSizes({480, 480});
-        }
+        // Mostrar código expandido en el panel derecho solo si hay #incluir
+        bool hayInclude = (src.find("#incluir") != std::string::npos);
         if (hayInclude) {
+            if (!editorExpandido->isVisible()) {
+                editorExpandido->show();
+                splitterEditores->setSizes({480, 480});
+            }
             editorExpandido->setPlainText(QString::fromStdString(expanded));
-        } else if (editorExpandido->isVisible()) {
-            editorExpandido->hide();
-            splitterEditores->setSizes({680, 0});
+        } else {
+            if (editorExpandido->isVisible()) {
+                editorExpandido->hide();
+                splitterEditores->setSizes({680, 0});
+            }
         }
         auto tokens = tokenizar(expanded);
         parsear(tokens, &pasos);
@@ -977,15 +1144,18 @@ void VentanaPrincipal::manejarEjecucion() {
                             .replace("\n","<br>");
         html += salida;
 
-        html += QString("<br><span style='color:#22c55e;'>✓ %1 pasos generados."
+        html += QString("<br><span style='color:%1;'>✓ %2 pasos generados."
                         " Presiona Siguiente para animar.</span>")
+                .arg(Theme::GUTTER_ARROW)
                 .arg(pasos.size());
         statusBar()->showMessage(QString("Compilado — %1 pasos").arg(pasos.size()));
 
     } catch (const std::exception& e) {
         setInputHook(nullptr);
         std::cout.rdbuf(old);
-        if (editorExpandido->isVisible()) {
+        // En error, ocultar panel expandido solo si no hay #incluir en el código
+        bool hayInclude = (src.find("#incluir") != std::string::npos);
+        if (!hayInclude && editorExpandido->isVisible()) {
             editorExpandido->hide();
             splitterEditores->setSizes({680, 0});
         }
@@ -993,7 +1163,7 @@ void VentanaPrincipal::manejarEjecucion() {
                             .replace("\n","<br>");
         if (!salida.isEmpty())
             html += salida;
-        html += QString("<br><span style='color:#f87171;'>%1</span>")
+        html += QString("<br><span style='color:%1;'>%2</span>").arg(Theme::TXT_ERROR)
                 .arg(QString::fromStdString(e.what()).toHtmlEscaped()
                      .replace("\n","<br>"));
         statusBar()->showMessage("Error de compilación.");
@@ -1214,6 +1384,32 @@ void VentanaPrincipal::aplicarEvento(const EventoPaso& ev) {
         setMensajeEstado(estadoActual.mensajeEstado, false);
         break;
     
+    case TipoEvento::ELEGIR_CASO: {
+        resaltarLinea(ev.linea);
+        estadoActual.lineaActiva = ev.linea;
+        std::string msg = "elegir: coincidió " +
+            (ev.valor == "defecto" ? std::string("defecto") :
+             std::string("caso ") + ev.valor);
+        estadoActual.mensajeEstado = msg;
+        estadoActual.mensajeError  = false;
+        setMensajeEstado(msg, false);
+        break;
+    }
+
+    case TipoEvento::ROMPER:
+        resaltarLinea(ev.linea);
+        estadoActual.mensajeEstado = "parar: saliendo del bloque";
+        estadoActual.mensajeError  = false;
+        setMensajeEstado(estadoActual.mensajeEstado, false);
+        break;
+
+    case TipoEvento::CONTINUAR:
+        resaltarLinea(ev.linea);
+        estadoActual.mensajeEstado = "continuar: saltando a siguiente iteración";
+        estadoActual.mensajeError  = false;
+        setMensajeEstado(estadoActual.mensajeEstado, false);
+        break;
+
     case TipoEvento::PUNTERO_MODIFICADO:
     case TipoEvento::PUNTERO_DESREFERENCIADO:
         break; // Se implementará el diseño visual después con Jesus y Estrella
@@ -1258,7 +1454,7 @@ static void _resaltarEditor(CodeEditor* ed, int linea, bool scroll = true) {
     QList<QTextEdit::ExtraSelection> sels;
     if (linea > 0) {
         QTextEdit::ExtraSelection sel;
-        sel.format.setBackground(QColor("#1e3a5f"));
+        sel.format.setBackground(QColor(Theme::LINE_HIGHLIGHT));
         sel.format.setProperty(QTextFormat::FullWidthSelection, true);
 
         QTextCursor cur(ed->document());
@@ -1319,16 +1515,16 @@ void VentanaPrincipal::actualizarTarjetaVariable(const std::string& nombre,
     QString qValor  = QString::fromStdString(valor);
     QString objName = "var_" + qNombre;
 
-    QString colorBorde = esNueva ? "#818cf8" : "#38bdf8";
+    QString colorBorde = esNueva ? Theme::CARD_BORDER_NEW : Theme::CARD_BORDER;
     QString estilo =
-        QString("QLabel { background:#0f172a; color:#e2e8f0;"
-                "border:1px solid %1; border-radius:6px;"
+        QString("QLabel { background:%1; color:%2;"
+                "border:1px solid %3; border-radius:6px;"
                 "padding:6px 10px; font-family:'Courier New'; font-size:12px;"
-                "min-width:60px; }").arg(colorBorde);
+                "min-width:60px; }").arg(Theme::BG_CARD, Theme::TXT_CARD, colorBorde);
 
     QString txt = QString("<div style='color:%1;font-weight:700;'>%2</div>"
-                          "<div style='color:#f8fafc;'>%3</div>")
-                  .arg(colorBorde, qNombre, qValor);
+                          "<div style='color:%3;'>%4</div>")
+                  .arg(colorBorde, qNombre, Theme::TXT_CARD_VAL, qValor);
 
     QList<QLabel*> found = zonaTarjetas->findChildren<QLabel*>(objName);
     if (!found.isEmpty()) {
@@ -1390,7 +1586,9 @@ void VentanaPrincipal::actualizarVistaArreglo(const std::string& /*nombre*/,
         if (activa) {
             QLabel* arr = new QLabel("▼", celda);
             arr->setAlignment(Qt::AlignCenter);
-            arr->setStyleSheet("color:#fbbf24; font-size:11px; background:transparent;");
+            arr->setStyleSheet(
+                QString("color:%1; font-size:11px; background:transparent;")
+                .arg(Theme::ACCENT_AMBER));
             lc->addWidget(arr);
         }
 
@@ -1400,16 +1598,16 @@ void VentanaPrincipal::actualizarVistaArreglo(const std::string& /*nombre*/,
             QString("QLabel { background:%1; color:%2; border:1px solid %3;"
                     "border-radius:4px; font-family:'Courier New';"
                     "font-size:13px; font-weight:700; min-height:38px; }")
-            .arg(activa ? "#2d1d00" : "#0f172a")
-            .arg(activa ? "#fbbf24" : "#93c5fd")
-            .arg(activa ? "#fbbf24" : "#1e3a5f")
+            .arg(activa ? Theme::BG_ARR_ACT : Theme::BG_CARD)
+            .arg(activa ? Theme::ACCENT_AMBER : Theme::TXT_ARR)
+            .arg(activa ? Theme::ACCENT_AMBER : Theme::BORDER_LINE)
         );
 
         QLabel* idx = new QLabel(QString("[%1]").arg(i), celda);
         idx->setAlignment(Qt::AlignCenter);
         idx->setStyleSheet(
             QString("QLabel { color:%1; font-size:10px; background:transparent; }")
-            .arg(activa ? "#fbbf24" : "#4b5563"));
+            .arg(activa ? Theme::ACCENT_AMBER : Theme::TXT_ARR_IDX));
 
         lc->addWidget(val);
         lc->addWidget(idx);
@@ -1447,12 +1645,14 @@ void VentanaPrincipal::setMensajeEstado(const std::string& msg, bool esError) {
     etiquetaEstado->setText(QString::fromStdString(msg));
     if (esError) {
         etiquetaEstado->setStyleSheet(
-            "QLabel { color:#fca5a5; background:#3b0000; border:1px solid #7f1d1d;"
-            "border-radius:4px; padding:5px 8px; font-size:11px; }");
+            QString("QLabel { color:%1; background:%2; border:1px solid %3;"
+            "border-radius:4px; padding:5px 8px; font-size:11px; }")
+            .arg(Theme::TXT_ERROR, Theme::BG_ERROR, Theme::BORDER_ERROR));
     } else {
         etiquetaEstado->setStyleSheet(
-            "QLabel { color:#86efac; background:#052e16; border:1px solid #166534;"
-            "border-radius:4px; padding:5px 8px; font-size:11px; }");
+            QString("QLabel { color:%1; background:%2; border:1px solid %3;"
+            "border-radius:4px; padding:5px 8px; font-size:11px; }")
+            .arg(Theme::TXT_SUCCESS, Theme::BG_SUCCESS, Theme::BORDER_SUCCESS));
     }
     etiquetaEstado->setVisible(true);
 }

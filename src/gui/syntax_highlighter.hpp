@@ -4,13 +4,14 @@
 #include <QRegularExpression>
 #include <QVector>
 #include <QStringList>
+#include "gui/theme.hpp"
 
 class SyntaxHighlighter : public QSyntaxHighlighter {
 public:
     explicit SyntaxHighlighter(QTextDocument* parent)
         : QSyntaxHighlighter(parent)
     {
-        // ── Paleta de colores (match con tema oscuro) ──────────────
+        // ── Paleta de colores (tema oscuro por defecto) ────────────
         _fmtKeyword.setForeground(QColor("#569cd6"));
         _fmtKeyword.setFontWeight(QFont::Bold);
 

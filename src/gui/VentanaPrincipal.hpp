@@ -24,6 +24,7 @@
 #include <QCloseEvent>
 #include "core/eventos.hpp"
 
+class SyntaxHighlighter;
 
 // ─── Gutter de números de línea ──────────────────────────────────
 class LineNumberArea : public QWidget {
@@ -84,6 +85,10 @@ private slots:
     void guardarArchivo();
     void guardarComoArchivo();
     void salirAplicacion();
+    void toggleTheme();
+    void aumentarFuente();
+    void reducirFuente();
+    void acercaDe();
 
 private:
     // ── Widgets ───────────────────────────────────────────────────
@@ -131,6 +136,17 @@ private:
     };
     std::vector<SnapshotUI> historial;
     SnapshotUI estadoActual;
+
+    // ── Syntax highlighters (para recrear al cambiar tema) ────────
+    SyntaxHighlighter* _hlCodigo    = nullptr;
+    SyntaxHighlighter* _hlExpandido = nullptr;
+
+    // ── Tema ──────────────────────────────────────────────────────
+    bool _temaOscuro = true;
+    QWidget* _toolbar = nullptr;
+
+    // ── Helper: re-aplicar todos los estilos visuales ─────────────
+    void reestilarTodo();
 
     // ── Archivo actual ────────────────────────────────────────────
     QString rutaActual;

@@ -18,8 +18,11 @@ enum class TipoEvento {
     MOSTRAR_SALIDA,     // mostrar(...)
     CONDICION_SI,       // evalúa la condición del si
     LEER_SOLICITUD,
-    PUNTERO_MODIFICADO, // Cuando cambia la dirección a la que apunta
-    PUNTERO_DESREFERENCIADO     // leer(variable) — solicita entrada al usuario
+    PUNTERO_MODIFICADO,     // Cuando cambia la dirección a la que apunta
+    PUNTERO_DESREFERENCIADO, // *ptr — leer el valor apuntado
+    ELEGIR_CASO,            // elegir: coincidió un caso o defecto
+    ROMPER,                 // romper/parar — saliendo del bloque
+    CONTINUAR               // continuar — salta a la siguiente iteración
 };
 
 // ─── Un paso individual de la traza de ejecución

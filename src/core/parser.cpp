@@ -1043,15 +1043,19 @@ void parseElegir(bool ejecutar) {
             bool coincide = ejecutar && !casoEjecutado && (exprVal == casoVal);
             if (coincide) casoEjecutado = true;
 
-            if (ejecutar && coincide)
+            if (ejecutar && coincide) {
                 emitir({TipoEvento::LINEA_ACTIVA, lineaCaso});
+                emitir({TipoEvento::ELEGIR_CASO,  lineaCaso, "", casoVal});
+            }
 
             while (!esTipo(TipoToken::CASO) && !esTipo(TipoToken::DEFECTO) &&
                    !esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
                 if (esTipo(TipoToken::BREAK)) {
+                    int linParar = actual().linea;
                     pos++;
                     consumir(TipoToken::PUNTO_COMA);
                     if (ejecutar && (coincide || casoEjecutado)) {
+                        emitir({TipoEvento::ROMPER, linParar});
                         solicitudBreak = true;
                         salirSwitch = true;
                     }
@@ -1064,18 +1068,24 @@ void parseElegir(bool ejecutar) {
             if (salirSwitch || solicitudRetorno) break;
 
         } else if (esTipo(TipoToken::DEFECTO)) {
+            int lineaDefecto = actual().linea;
             pos++;
             consumir(TipoToken::DOS_PUNTOS);
 
             bool ejecutarDefecto = ejecutar && !casoEjecutado;
 
-            if (ejecutar && ejecutarDefecto)
-                emitir({TipoEvento::LINEA_ACTIVA, actual().linea});
+            if (ejecutar && ejecutarDefecto) {
+                emitir({TipoEvento::LINEA_ACTIVA, lineaDefecto});
+                emitir({TipoEvento::ELEGIR_CASO,  lineaDefecto, "", "defecto"});
+            }
 
             while (!esTipo(TipoToken::LLAVE_DE) && !esTipo(TipoToken::FIN)) {
                 if (esTipo(TipoToken::BREAK)) {
+                    int linParar = actual().linea;
                     pos++;
                     consumir(TipoToken::PUNTO_COMA);
+                    if (ejecutarDefecto)
+                        emitir({TipoEvento::ROMPER, linParar});
                     break;
                 }
                 parseSentencia(ejecutarDefecto);
@@ -1264,7 +1274,7 @@ void parseSentencia(bool ejecutar) {
         consumir(TipoToken::PUNTO_COMA);
         if (ejecutar) {
             solicitudBreak = true;
-            emitir({TipoEvento::LINEA_ACTIVA, linBreak});
+            emitir({TipoEvento::ROMPER, linBreak});
         }
         return;
     }
@@ -1274,7 +1284,7 @@ void parseSentencia(bool ejecutar) {
         consumir(TipoToken::PUNTO_COMA);
         if (ejecutar) {
             solicitudContinue = true;
-            emitir({TipoEvento::LINEA_ACTIVA, linCont});
+            emitir({TipoEvento::CONTINUAR, linCont});
         }
         return;
     }
