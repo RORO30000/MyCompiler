@@ -799,13 +799,13 @@ void parseMientras(bool ejecutar) {
     if (salir || !condBool || solicitudRetorno) {
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
     }
+    int lineaFin = actual().linea;
     consumir(TipoToken::FIN_MIENTRAS);
-    emitir({TipoEvento::BUCLE_FIN, lineaMientras});
+    emitir({TipoEvento::BUCLE_FIN, lineaFin});
 }
 
 // ─── para / fin_para ─────────────────────────────────────────────
 void parsePara(bool ejecutar) {
-    int lineaPara = actual().linea;
     pos++; consumir(TipoToken::PAREN_IZ);
 
     // Inicialización: variable = expr  o  tipo variable = expr  o  vacío
@@ -946,8 +946,9 @@ void parsePara(bool ejecutar) {
     }
 
     while (!esTipo(TipoToken::FIN_PARA) && !esTipo(TipoToken::FIN)) pos++;
+    int lineaFinPara = actual().linea;
     consumir(TipoToken::FIN_PARA);
-    emitir({TipoEvento::BUCLE_FIN, lineaPara});
+    emitir({TipoEvento::BUCLE_FIN, lineaFinPara});
 }
 
 // ─── hacer / mientras (do-while) ─────────────────────────────────
@@ -1010,8 +1011,9 @@ void parseHacerMientras(bool ejecutar) {
 
     if (salir || !condBool || solicitudRetorno)
         while (!esTipo(TipoToken::FIN_MIENTRAS) && !esTipo(TipoToken::FIN)) pos++;
+    int lineaFinMientras = actual().linea;
     consumir(TipoToken::FIN_MIENTRAS);
-    emitir({TipoEvento::BUCLE_FIN, lineaMientras});
+    emitir({TipoEvento::BUCLE_FIN, lineaFinMientras});
 }
 
 // ─── elegir / caso / defecto (switch) ────────────────────────────

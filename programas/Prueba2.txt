@@ -1,6 +1,10 @@
 
 #incluir "matematica.txt"
 
+// Para funciones adicionales:
+// #incluir "matematica_avanzada.txt"
+// #incluir "texto.txt"
+
 Principal() {
     mostrar("Hola Mundo");
     

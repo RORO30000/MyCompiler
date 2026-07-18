@@ -28,13 +28,20 @@
 // ─── Gutter de números de línea ──────────────────────────────────
 class LineNumberArea : public QWidget {
     Q_OBJECT
+    Q_PROPERTY(qreal punteroY READ punteroY WRITE setPunteroY)
 public:
     explicit LineNumberArea(QTextEdit* editor);
     int gutterWidth();
+    void setLineaActiva(int linea);
+    qreal punteroY() const { return _punteroY; }
+    void setPunteroY(qreal y);
 protected:
     void paintEvent(QPaintEvent* ev) override;
 private:
     QTextEdit* _ed;
+    int _lineaActiva = -1;
+    qreal _punteroY = -30.0;
+    QPropertyAnimation* _animPuntero = nullptr;
 };
 
 // ─── Editor con gutter integrado ─────────────────────────────────
@@ -42,6 +49,7 @@ class CodeEditor : public QTextEdit {
     Q_OBJECT
 public:
     explicit CodeEditor(QWidget* parent = nullptr);
+    void setLineaActiva(int linea) { _gutter->setLineaActiva(linea); }
 protected:
     void resizeEvent(QResizeEvent* ev) override;
     void scrollContentsBy(int dx, int dy) override;
@@ -67,6 +75,9 @@ private slots:
     void manejarEjecucion();
     void avanzarPaso();
     void retrocederPaso();
+    void playPause();
+    void stopPlay();
+    void avanzarAuto();
     void cargarPlantilla(const QString& nombre);
     void nuevoArchivo();
     void abrirArchivo();
@@ -77,11 +88,18 @@ private slots:
 private:
     // ── Widgets ───────────────────────────────────────────────────
     CodeEditor*  editorCodigo;
+    CodeEditor*  editorExpandido = nullptr;
+    QSplitter*   splitterEditores = nullptr;
     QPushButton* botonEjecutar;
     QComboBox*   comboPlantillas;
     QPushButton* botonSiguiente;
     QPushButton* botonAnterior;
     QLabel*      etiquetaPaso;
+    QPushButton* botonPlay;
+    QPushButton* botonStop;
+    QSlider*     sliderVelocidad;
+    QLabel*      etiquetaVelocidad;
+    QTimer*      timerAutoPlay;
 
     // Panel derecho
     QWidget*     panelAnimacion;
@@ -96,6 +114,10 @@ private:
     // ── Cola de pasos ─────────────────────────────────────────────
     std::vector<EventoPaso> pasos;
     int pasoActual = 0;
+
+    // ── Mapa de líneas expandida → original ──────────────────────
+    std::vector<int> mapaLineas;
+    int _ultimaLineaExpandida = -1;
 
     // ── Snapshot ─────────────────────────────────────────────────
     struct SnapshotUI {

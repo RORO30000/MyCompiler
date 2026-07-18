@@ -9,6 +9,7 @@
 #include <QFrame>
 #include <QScrollArea>
 #include <QPainter>
+#include <QPainterPath>
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
 #include <QMenuBar>
@@ -29,6 +30,7 @@
 std::vector<Token>  tokenizar(const std::string&);
 double              parsear(std::vector<Token>&, std::vector<EventoPaso>* = nullptr);
 std::string         preprocesarBibliotecas(const std::string&);
+void                preprocesarBibliotecas(const std::string&, std::string&, std::vector<int>&);
 void                setInputHook(std::string (*hook)());
 
 // ═════════════════════════════════════════════════════════════════
@@ -81,7 +83,42 @@ static QPushButton* makeBtn(const QString& label,
 // ═════════════════════════════════════════════════════════════════
 //  LineNumberArea
 // ═════════════════════════════════════════════════════════════════
-LineNumberArea::LineNumberArea(QTextEdit* editor) : QWidget(editor), _ed(editor) {}
+LineNumberArea::LineNumberArea(QTextEdit* editor) : QWidget(editor), _ed(editor) {
+    _animPuntero = new QPropertyAnimation(this, "punteroY", this);
+    _animPuntero->setDuration(180);
+    _animPuntero->setEasingCurve(QEasingCurve::OutCubic);
+}
+
+void LineNumberArea::setLineaActiva(int linea) {
+    _lineaActiva = linea;
+    if (linea <= 0) {
+        if (_animPuntero->state() == QAbstractAnimation::Running)
+            _animPuntero->stop();
+        _punteroY = -30.0;
+        update();
+        return;
+    }
+
+    QTextBlock blk = _ed->document()->findBlockByNumber(linea - 1);
+    if (!blk.isValid()) return;
+
+    auto* layout = _ed->document()->documentLayout();
+    QRectF br = layout->blockBoundingRect(blk)
+                     .translated(0, -_ed->verticalScrollBar()->value());
+    qreal targetY = br.top() + 2;
+
+    if (_animPuntero->state() == QAbstractAnimation::Running)
+        _animPuntero->stop();
+
+    _animPuntero->setStartValue(_punteroY);
+    _animPuntero->setEndValue(targetY);
+    _animPuntero->start();
+}
+
+void LineNumberArea::setPunteroY(qreal y) {
+    _punteroY = y;
+    update();
+}
 
 int LineNumberArea::gutterWidth() {
     int digits = 1, max = std::max(1, _ed->document()->blockCount());
@@ -118,6 +155,20 @@ void LineNumberArea::paintEvent(QPaintEvent* ev) {
         }
         ++num;
         blk = blk.next();
+    }
+
+    // Flecha animada en la línea activa
+    if (_punteroY > -20.0) {
+        qreal arrowX = width() - 8.0;
+        QPainterPath path;
+        path.moveTo(arrowX,     _punteroY);
+        path.lineTo(arrowX + 8, _punteroY + 6);
+        path.lineTo(arrowX,     _punteroY + 12);
+        path.closeSubpath();
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor("#22c55e"));
+        p.setRenderHint(QPainter::Antialiasing);
+        p.drawPath(path);
     }
 }
 
@@ -300,10 +351,26 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 
     new SyntaxHighlighter(editorCodigo->document());
 
+    // ── Editor expandido (lado derecho, read-only, oculto) ───────
+    editorExpandido = new CodeEditor(this);
+    editorExpandido->setReadOnly(true);
+    editorExpandido->setFont(fe);
+    editorExpandido->setStyleSheet(
+        QString("QTextEdit { background:%1; color:%2; border:none;"
+                "border-left:2px solid #3b82f6; }")
+        .arg(Pal::BG_EDITOR, Pal::TXT_DIM)
+    );
+    editorExpandido->setPlaceholderText("El código expandido aparecerá aquí al compilar...");
+    editorExpandido->hide();
+    new SyntaxHighlighter(editorExpandido->document());
+
     // ── Botones ───────────────────────────────────────────────────
     botonEjecutar  = makeBtn("▶  Compilar",  Pal::ACCENT_BLUE,  Pal::H_BLUE,  this);
     botonAnterior  = makeBtn("◀  Anterior",  Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
     botonSiguiente = makeBtn("Siguiente  ▶", Pal::ACCENT_GREEN, Pal::H_GREEN, this);
+    botonPlay      = makeBtn("▶ Play",       Pal::ACCENT_GREEN, Pal::H_GREEN, this);
+    botonStop      = makeBtn("■ Stop",       Pal::ACCENT_GRAY,  Pal::H_GRAY,  this);
+    botonPlay->setCheckable(true);
 
     // Combos
     comboPlantillas = new QComboBox(this);
@@ -328,6 +395,28 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 
     botonSiguiente->setEnabled(false);
     botonAnterior->setEnabled(false);
+    botonPlay->setEnabled(false);
+    botonStop->setEnabled(false);
+
+    // ── Speed slider ──────────────────────────────────────────────
+    sliderVelocidad = new QSlider(Qt::Horizontal, this);
+    sliderVelocidad->setRange(1, 10);
+    sliderVelocidad->setValue(3);
+    sliderVelocidad->setFixedWidth(100);
+    sliderVelocidad->setStyleSheet(
+        "QSlider::groove:horizontal { height:4px; background:#444; border-radius:2px; }"
+        "QSlider::handle:horizontal { background:#38bdf8; width:14px; height:14px;"
+        "  margin:-5px 0; border-radius:7px; }"
+        "QSlider::sub-page:horizontal { background:#38bdf8; border-radius:2px; }");
+    sliderVelocidad->setEnabled(false);
+
+    etiquetaVelocidad = new QLabel("lento", this);
+    etiquetaVelocidad->setStyleSheet(
+        QString("QLabel { color:%1; font-size:10px; padding:0 4px; }").arg(Pal::TXT_DIM));
+
+    // ── Timer para auto-play ──────────────────────────────────────
+    timerAutoPlay = new QTimer(this);
+    timerAutoPlay->setSingleShot(false);
 
     etiquetaPaso = new QLabel("—", this);
     etiquetaPaso->setStyleSheet(
@@ -439,7 +528,14 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
 
     layToolbar->addWidget(botonAnterior);
     layToolbar->addWidget(botonSiguiente);
+    layToolbar->addSpacing(4);
+    layToolbar->addWidget(botonPlay);
+    layToolbar->addWidget(botonStop);
+    layToolbar->addSpacing(6);
     layToolbar->addWidget(etiquetaPaso);
+    layToolbar->addSpacing(8);
+    layToolbar->addWidget(sliderVelocidad);
+    layToolbar->addWidget(etiquetaVelocidad);
     layToolbar->addStretch();
     layMain->addWidget(toolbar);
 
@@ -449,13 +545,20 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     splitter->setStyleSheet(
         "QSplitter::handle { background:#333; }");
 
-    // lado izquierdo: solo editor
+    // lado izquierdo: splitter con editor original + expandido
     QWidget* ladoIzq = new QWidget();
     ladoIzq->setStyleSheet("background:transparent;");
     QVBoxLayout* layIzq = new QVBoxLayout(ladoIzq);
     layIzq->setContentsMargins(0,0,0,0);
     layIzq->setSpacing(0);
-    layIzq->addWidget(editorCodigo, 1);
+
+    splitterEditores = new QSplitter(Qt::Horizontal, ladoIzq);
+    splitterEditores->setHandleWidth(4);
+    splitterEditores->setStyleSheet("QSplitter::handle { background:#333; }");
+    splitterEditores->addWidget(editorCodigo);
+    splitterEditores->addWidget(editorExpandido);
+    splitterEditores->setSizes({680, 0});
+    layIzq->addWidget(splitterEditores, 1);
 
     splitter->addWidget(ladoIzq);
     splitter->addWidget(panelAnimacion);
@@ -467,6 +570,14 @@ VentanaPrincipal::VentanaPrincipal(QWidget* parent) : QMainWindow(parent)
     connect(botonEjecutar,  &QPushButton::clicked, this, &VentanaPrincipal::manejarEjecucion);
     connect(botonSiguiente, &QPushButton::clicked, this, &VentanaPrincipal::avanzarPaso);
     connect(botonAnterior,  &QPushButton::clicked, this, &VentanaPrincipal::retrocederPaso);
+    connect(botonPlay,      &QPushButton::clicked, this, &VentanaPrincipal::playPause);
+    connect(botonStop,      &QPushButton::clicked, this, &VentanaPrincipal::stopPlay);
+    connect(timerAutoPlay,  &QTimer::timeout,      this, &VentanaPrincipal::avanzarAuto);
+    connect(sliderVelocidad, &QSlider::valueChanged, this, [this](int v) {
+        int ms[] = {800, 500, 350, 250, 180, 120, 80, 50, 30, 15};
+        timerAutoPlay->setInterval(ms[qBound(0, v-1, 9)]);
+        etiquetaVelocidad->setText(v <= 3 ? "lento" : v <= 7 ? "medio" : "rápido");
+    });
     connect(comboPlantillas,
         &QComboBox::currentTextChanged,
         this,
@@ -645,7 +756,9 @@ void VentanaPrincipal::cargarPlantilla(const QString& nombre)
         if(nombre == "#incluir")
         {
             codigo =
-                "\n#incluir \"matematica.txt\"\n";
+                "\n#incluir \"matematica.txt\"       // librería básica\n"
+                "// #incluir \"matematica_avanzada.txt\"  // + funciones\n"
+                "// #incluir \"texto.txt\"                // + cadenas\n";
         }
 
         else if(nombre == "Variables")
@@ -827,11 +940,38 @@ void VentanaPrincipal::manejarEjecucion() {
     });
 
     try {
-        std::string expanded = preprocesarBibliotecas(src);
+        std::string expanded;
+        mapaLineas.clear();
+        preprocesarBibliotecas(src, expanded, mapaLineas);
+        // Mostrar código expandido en el panel derecho
+        bool hayInclude = false;
+        for (int v : mapaLineas) { if (v == 0) { hayInclude = true; break; } }
+        if (hayInclude && !editorExpandido->isVisible()) {
+            editorExpandido->show();
+            splitterEditores->setSizes({480, 480});
+        }
+        if (hayInclude) {
+            editorExpandido->setPlainText(QString::fromStdString(expanded));
+        } else if (editorExpandido->isVisible()) {
+            editorExpandido->hide();
+            splitterEditores->setSizes({680, 0});
+        }
         auto tokens = tokenizar(expanded);
         parsear(tokens, &pasos);
         setInputHook(nullptr);
         std::cout.rdbuf(old);
+
+        // Colapsar eventos consecutivos de la misma línea en un meta-paso
+        if (!pasos.empty()) {
+            std::vector<EventoPaso> agrupados;
+            for (auto& ev : pasos) {
+                if (agrupados.empty() || agrupados.back().linea != ev.linea)
+                    agrupados.push_back(ev);
+                else
+                    agrupados.back() = ev;
+            }
+            pasos = std::move(agrupados);
+        }
 
         QString salida = QString::fromStdString(buf.str()).toHtmlEscaped()
                             .replace("\n","<br>");
@@ -845,6 +985,10 @@ void VentanaPrincipal::manejarEjecucion() {
     } catch (const std::exception& e) {
         setInputHook(nullptr);
         std::cout.rdbuf(old);
+        if (editorExpandido->isVisible()) {
+            editorExpandido->hide();
+            splitterEditores->setSizes({680, 0});
+        }
         QString salida = QString::fromStdString(buf.str()).toHtmlEscaped()
                             .replace("\n","<br>");
         if (!salida.isEmpty())
@@ -877,6 +1021,54 @@ void VentanaPrincipal::retrocederPaso() {
     historial.pop_back();
     restaurarSnapshot(snap);
     actualizarBotones();
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  Auto-play
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::playPause() {
+    if (timerAutoPlay->isActive()) {
+        timerAutoPlay->stop();
+        botonPlay->setText("▶ Play");
+        botonPlay->setChecked(false);
+    } else {
+        if (pasoActual >= (int)pasos.size()) {
+            stopPlay();
+            return;
+        }
+        botonPlay->setText("⏸ Pausa");
+        botonPlay->setChecked(true);
+        timerAutoPlay->start();
+    }
+}
+
+void VentanaPrincipal::stopPlay() {
+    timerAutoPlay->stop();
+    botonPlay->setText("▶ Play");
+    botonPlay->setChecked(false);
+    if (editorExpandido->isVisible()) {
+        editorExpandido->hide();
+        splitterEditores->setSizes({680, 0});
+    }
+    // Reset
+    historial.clear();
+    pasoActual = 0;
+    estadoActual = SnapshotUI();
+    limpiarTarjetas();
+    limpiarArreglo();
+    etiquetaEstado->setVisible(false);
+    resaltarLinea(-1);
+    actualizarBotones();
+}
+
+void VentanaPrincipal::avanzarAuto() {
+    if (pasoActual >= (int)pasos.size()) {
+        timerAutoPlay->stop();
+        botonPlay->setText("▶ Play");
+        botonPlay->setChecked(false);
+        return;
+    }
+    avanzarPaso();
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -1060,16 +1252,16 @@ void VentanaPrincipal::restaurarSnapshot(const SnapshotUI& snap) {
 }
 
 // ═════════════════════════════════════════════════════════════════
-//  resaltarLinea
+//  _resaltarEditor — helper para un solo editor
 // ═════════════════════════════════════════════════════════════════
-void VentanaPrincipal::resaltarLinea(int linea) {
+static void _resaltarEditor(CodeEditor* ed, int linea, bool scroll = true) {
     QList<QTextEdit::ExtraSelection> sels;
     if (linea > 0) {
         QTextEdit::ExtraSelection sel;
         sel.format.setBackground(QColor("#1e3a5f"));
         sel.format.setProperty(QTextFormat::FullWidthSelection, true);
 
-        QTextCursor cur(editorCodigo->document());
+        QTextCursor cur(ed->document());
         cur.movePosition(QTextCursor::Start);
         for (int i = 1; i < linea; ++i)
             cur.movePosition(QTextCursor::NextBlock);
@@ -1077,10 +1269,43 @@ void VentanaPrincipal::resaltarLinea(int linea) {
         sel.cursor = cur;
         sels.append(sel);
 
-        editorCodigo->setTextCursor(cur);
-        editorCodigo->ensureCursorVisible();
+        if (scroll) {
+            ed->setTextCursor(cur);
+            ed->ensureCursorVisible();
+        }
     }
-    editorCodigo->setExtraSelections(sels);
+    ed->setExtraSelections(sels);
+    ed->setLineaActiva(linea);
+}
+
+// ═════════════════════════════════════════════════════════════════
+//  resaltarLinea  — sincroniza ambos paneles según el mapa
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::resaltarLinea(int lineaExpandida) {
+    if (lineaExpandida <= 0) {
+        // Limpiar ambos paneles
+        _resaltarEditor(editorCodigo, -1);
+        if (editorExpandido->isVisible())
+            _resaltarEditor(editorExpandido, -1);
+        _ultimaLineaExpandida = -1;
+        return;
+    }
+
+    _ultimaLineaExpandida = lineaExpandida;
+
+    // Panel izquierdo: convertir a línea original
+    int lineaOrig = ((size_t)lineaExpandida < mapaLineas.size())
+                    ? mapaLineas[lineaExpandida] : -1;
+    if (lineaOrig > 0) {
+        _resaltarEditor(editorCodigo, lineaOrig, true);
+    } else {
+        // Línea externa (librería) o inválida → ocultar flecha en original
+        _resaltarEditor(editorCodigo, -1);
+    }
+
+    // Panel derecho: siempre mostrar expandido si visible
+    if (editorExpandido->isVisible())
+        _resaltarEditor(editorExpandido, lineaExpandida, false);
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -1237,8 +1462,12 @@ void VentanaPrincipal::setMensajeEstado(const std::string& msg, bool esError) {
 // ═════════════════════════════════════════════════════════════════
 void VentanaPrincipal::actualizarBotones() {
     bool hay = !pasos.empty();
-    botonSiguiente->setEnabled(hay && pasoActual < (int)pasos.size());
-    botonAnterior->setEnabled(!historial.empty());
+    bool finalizado = hay && pasoActual >= (int)pasos.size();
+    botonSiguiente->setEnabled(hay && !finalizado);
+    botonAnterior->setEnabled(!historial.empty() && !timerAutoPlay->isActive());
+    botonPlay->setEnabled(hay);
+    botonStop->setEnabled(hay && (pasoActual > 0 || timerAutoPlay->isActive()));
+    sliderVelocidad->setEnabled(hay);
     etiquetaPaso->setText(
         hay ? QString("Paso %1 / %2").arg(pasoActual).arg(pasos.size()) : "—");
 }

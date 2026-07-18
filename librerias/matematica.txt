@@ -1,14 +1,14 @@
-funcion calcularPotencia(entero base, entero exponente) retornar entero {
+entero calcularPotencia(entero base, entero exponente) {
     entero resultado = 1;
     entero i = 0;
     mientras (i < exponente) {
         resultado = resultado * base;
-        i = i + 1;
+        i++;
     }
     fin_mientras
     retornar resultado;
 }
 
-funcion calcularCuadrado(entero n) retornar entero {
+entero calcularCuadrado(entero n) {
     retornar n * n;
 }

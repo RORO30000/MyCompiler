@@ -1,0 +1,21 @@
+// ─── texto.txt ──────────────────────────────────────────────────
+// Funciones de manipulación de cadenas
+// ────────────────────────────────────────────────────────────────
+
+// Devuelve verdadero si la cadena s está vacía ("")
+booleano esVacia(cadena s) {
+    retornar s == "";
+}
+
+// Repite la cadena s, n veces
+// Ej: repetir("ja", 3) → "jajaja"
+cadena repetir(cadena s, entero n) {
+    cadena res = "";
+    entero i = 0;
+    mientras (i < n) {
+        res = res + s;
+        i++;
+    }
+    fin_mientras
+    retornar res;
+}

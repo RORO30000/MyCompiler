@@ -1,0 +1,104 @@
+// ─── matematica_avanzada.txt ────────────────────────────────────
+// Funciones matemáticas adicionales
+// ────────────────────────────────────────────────────────────────
+
+// Devuelve el valor absoluto de x
+entero absoluto(entero x) {
+    si (x < 0) {
+        retornar -x;
+    } sino {
+        retornar x;
+    }
+    fin_si
+}
+
+// Devuelve el mayor entre a y b
+entero maximo(entero a, entero b) {
+    si (a > b) {
+        retornar a;
+    } sino {
+        retornar b;
+    }
+    fin_si
+}
+
+// Devuelve el menor entre a y b
+entero minimo(entero a, entero b) {
+    si (a < b) {
+        retornar a;
+    } sino {
+        retornar b;
+    }
+    fin_si
+}
+
+// Calcula la raíz cuadrada de x usando el método de Newton
+// Ej: raiz(9) → 3
+decimal raiz(decimal x) {
+    decimal aproximacion = x / 2;
+    entero i = 0;
+    mientras (i < 20) {
+        aproximacion = (aproximacion + x / aproximacion) / 2;
+        i++;
+    }
+    fin_mientras
+    retornar aproximacion;
+}
+
+// Variable global para la semilla del generador aleatorio
+entero _semilla_azar = 12345;
+
+// Genera un número pseudo-aleatorio entre 0 y maximo-1
+// Ej: azar(10) → 0..9
+entero azar(entero maximo) {
+    _semilla_azar = (_semilla_azar * 1103515245 + 12345);
+    si (_semilla_azar < 0) {
+        _semilla_azar = -_semilla_azar;
+    }
+    fin_si
+    retornar _semilla_azar % maximo;
+}
+
+// Calcula el factorial de n (n!)
+// Ej: factorial(5) → 120
+entero factorial(entero n) {
+    entero res = 1;
+    mientras (n > 1) {
+        res = res * n;
+        n--;
+    }
+    fin_mientras
+    retornar res;
+}
+
+// Calcula base^exponente (exponente entero no negativo)
+// Ej: potencia(2, 10) → 1024
+entero potencia(entero base, entero exponente) {
+    entero res = 1;
+    entero i = 0;
+    mientras (i < exponente) {
+        res = res * base;
+        i++;
+    }
+    fin_mientras
+    retornar res;
+}
+
+// Determina si n es primo
+// Retorna verdadero si n es primo, falso en caso contrario
+booleano esPrimo(entero n) {
+    si (n < 2) {
+        retornar falso;
+    }
+    fin_si
+    entero i = 2;
+    mientras (i * i <= n) {
+        si (n % i == 0) {
+            retornar falso;
+        }
+        fin_si
+        i++;
+    }
+    fin_mientras
+    retornar verdadero;
+}
