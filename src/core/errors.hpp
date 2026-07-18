@@ -205,6 +205,18 @@ inline std::string error_variable_no_inicializada(const std::string& nombre, int
            "  Debes inicializarla con '=' al declararla.\n";
 }
 
+inline std::string error_puntero_nulo_desreferenciado(const std::string& nombrePtr, int linea) {
+    return "\n[ERROR DE PUNTERO - Línea " + std::to_string(linea) + "]\n"
+           "  Se intentó desreferenciar el puntero '" + nombrePtr + "' pero su valor es nulo (0).\n"
+           "  Asegúrate de inicializar el puntero con la dirección de una variable (ej: " + nombrePtr + " = &variable;) antes de acceder.\n";
+}
+
+inline std::string error_puntero_huerfano(const std::string& direccion, int linea) {
+    return "\n[ERROR DE MEMORIA - Línea " + std::to_string(linea) + "]\n"
+           "  La dirección de memoria '" + direccion + "' ya no es válida o está fuera de alcance.\n"
+           "  Esto sucede porque la variable que ocupaba este espacio de memoria ha sido liberada (Stack Frame deallocated).\n";
+}
+
 // ── Arreglos ──────────────────────────────────────────────────────
 
 inline std::string error_indice_fuera_rango(int idx, int tamano, int linea) {

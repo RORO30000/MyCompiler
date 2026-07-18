@@ -1021,7 +1021,14 @@ void VentanaPrincipal::aplicarEvento(const EventoPaso& ev) {
         estadoActual.mensajeError  = false;
         setMensajeEstado(estadoActual.mensajeEstado, false);
         break;
+    
+    case TipoEvento::PUNTERO_MODIFICADO:
+    case TipoEvento::PUNTERO_DESREFERENCIADO:
+        break; // Se implementará el diseño visual después con Jesus y Estrella
+    
+    
     }
+
 }
 
 // ═════════════════════════════════════════════════════════════════

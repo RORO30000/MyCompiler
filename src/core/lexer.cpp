@@ -206,6 +206,9 @@ std::vector<Token> tokenizar(const std::string& fuente) {
             case ':': tokens.push_back({TipoToken::DOS_PUNTOS,   ":", linea}); break;
             case ';': tokens.push_back({TipoToken::PUNTO_COMA,   ";", linea}); break;
             case ',': tokens.push_back({TipoToken::COMA,         ",", linea}); break;
+
+            case '&': tokens.push_back({TipoToken::AMPERSAND,    "&", linea}); break;
+
             default:  throw std::runtime_error(error_lexico_caracter(c, linea));
         }
         i++;

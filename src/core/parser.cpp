@@ -114,6 +114,15 @@ static std::string inferirTipoValor(const std::string& valor) {
 static void validarTipo(const std::string& esperado, const std::string& valor, int linea) {
     if (esperado == "vacio" || esperado == "desconocido") return;
 
+    // ─── NUEVO: PERMITIR DIRECCIONES Y NULOS EN PUNTEROS ────────────────
+    if (esperado.back() == '*') {
+        // Si el valor empieza con "0x" (dirección) o es "nulo", es válido
+        if (valor.rfind("0x", 0) == 0 || valor == "nulo") {
+            return; 
+        }
+    }
+    // ───────────────────────────────────────────────────────────────────
+
     std::string inferido = inferirTipoValor(valor);
 
     // cadena acepta cualquier valor (conversion implicita)
@@ -195,6 +204,37 @@ bool evaluarCondicionCompleta(bool ejecutar);
 // ─── Expresiones ─────────────────────────────────────────────────
 std::string parsePrimario(bool ejecutar) {
     Token t = actual();
+    // 1. Operador Dirección de (&nombre)
+    if (esTipo(TipoToken::AMPERSAND)) {
+        pos++; // consume '&'
+        Token varTok = consumir(TipoToken::VARIABLE);
+        if (ejecutar) {
+            std::string addr = tabla.obtenerDireccion(varTok.valor, varTok.linea);
+            // Genera evento visual de lectura de dirección
+            emitir({TipoEvento::VAR_LEIDA, varTok.linea, varTok.valor, addr});
+            return addr; // Devuelve "0x7ffdXXXX"
+        }
+        return "0";
+    }
+
+    // 2. Operador Desreferenciación (*puntero) como expresión de lectura
+    if (esTipo(TipoToken::MULTIPLICA)) { // '*' unario en este contexto
+        pos++; // consume '*'
+        // Evaluamos lo que sigue (que debería resultar en una dirección de memoria)
+        std::string exprVal = parsePrimario(ejecutar); 
+        if (ejecutar) {
+            if (exprVal == "0" || exprVal == "nulo") {
+                throw std::runtime_error("[ERROR] Intento de desreferenciar un puntero nulo en línea " + std::to_string(actual().linea));
+            }
+            Variable* varApuntada = tabla.obtenerPorDireccion(exprVal, actual().linea);
+            std::string nombreApuntado = tabla.obtenerNombrePorDireccion(exprVal);
+            
+            // Emitir evento especializado para actualizar el panel de visualización
+            emitir({TipoEvento::VAR_LEIDA, actual().linea, "*(" + nombreApuntado + ")", varApuntada->valor});
+            return varApuntada->valor;
+        }
+        return "0";
+    }  
 
     if (t.tipo == TipoToken::NUMERO || t.tipo == TipoToken::CADENA ||
         t.tipo == TipoToken::LITERAL_BOOLEANO || t.tipo == TipoToken::LITERAL_CARACTER) {
@@ -424,6 +464,13 @@ bool evaluarCondicionCompleta(bool ejecutar) {
 // ─── Declaración de variable simple ──────────────────────────────
 void parseDeclaracion(bool ejecutar) {
     std::string tipoVar = tokenATipoTexto(actual().tipo); pos++;
+
+    // ─── NUEVO: SI VE UN '*', ES UN TIPO PUNTERO ─────────────────
+    if (esTipo(TipoToken::MULTIPLICA)) {
+        pos++; // Consume el '*'
+        tipoVar += "*"; // Convierte "entero" en "entero*"
+    }
+
     Token nombreTok = consumir(TipoToken::VARIABLE);
     std::string valor;
     if (esTipo(TipoToken::IGUAL)) {
@@ -434,6 +481,9 @@ void parseDeclaracion(bool ejecutar) {
         else if (tipoVar == "decimal")  valor = "0";
         else if (tipoVar == "booleano") valor = "falso";
         else if (tipoVar == "caracter") valor = " ";
+
+        else if (tipoVar.back() == '*') valor = "nulo";
+
         else                            valor = "";
     }
     consumir(TipoToken::PUNTO_COMA);
@@ -1131,6 +1181,50 @@ void parseDefinicionFuncionConRetorno() {
 
 void parseSentencia(bool ejecutar) {
     if (solicitudRetorno || solicitudBreak || solicitudContinue) return;
+
+    if (esTipo(TipoToken::MULTIPLICA)) { // Unary '*' al inicio de una sentencia indica: *p = valor;
+        int lineaAsig = actual().linea;
+        pos++; // consume '*'
+        
+        // Obtenemos el nombre del puntero
+        Token ptrTok = consumir(TipoToken::VARIABLE);
+        consumir(TipoToken::IGUAL);
+        
+        std::string nuevoVal = parseExpresion(ejecutar);
+        consumir(TipoToken::PUNTO_COMA);
+        
+        if (ejecutar) {
+            // 1. Obtener la dirección que almacena el puntero (ej. "0x7ffd0000")
+            std::string direccion = tabla.obtener(ptrTok.valor, ptrTok.linea).valor;
+            
+            if (direccion == "0" || direccion == "nulo") {
+                throw std::runtime_error("[ERROR] Intento de asignación mediante desreferenciación de un puntero nulo.");
+            }
+            
+            // 2. Obtener la variable apuntada en la memoria física simulada
+            Variable* varApuntada = tabla.obtenerPorDireccion(direccion, ptrTok.linea);
+            std::string nombreApuntado = tabla.obtenerNombrePorDireccion(direccion);
+            
+            // 3. Validar tipos estrictos (ej. si el puntero es 'entero*' apunta a 'entero')
+            // El tipo del puntero es "entero*", el tipo base apuntado es "entero"
+            std::string tipoBaseEsperado = tabla.obtener(ptrTok.valor, ptrTok.linea).tipo;
+            if (tipoBaseEsperado.back() == '*') {
+                tipoBaseEsperado.pop_back(); // "entero*" -> "entero"
+            }
+            validarTipo(tipoBaseEsperado, nuevoVal, ptrTok.linea);
+            
+            // 4. Escribir el valor en la variable real
+            varApuntada->valor = nuevoVal;
+            
+            // 5. Emitir eventos para la GUI:
+            // Hacemos que la GUI entienda que la variable destino (ej: 'x') ha sido modificada.
+            emitir({TipoEvento::LINEA_ACTIVA, lineaAsig});
+            emitir({TipoEvento::VAR_MODIFICADA, lineaAsig, nombreApuntado, nuevoVal});
+        }
+        return;
+    }
+    
+
 
     if (esTipo(TipoToken::LLAVE_IZ) || esTipo(TipoToken::LLAVE_DE)) { pos++; return; }
     if (esTipo(TipoToken::MOSTRAR))  { parseMostrar(ejecutar); return; }

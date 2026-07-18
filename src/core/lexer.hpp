@@ -19,7 +19,8 @@ enum class TipoToken {
     MAS_IGUAL, MENOS_IGUAL, POR_IGUAL,
     AND_LOGICO, OR_LOGICO, NOT_LOGICO,
     BREAK, CONTINUE,
-    VARIABLE, FIN
+    VARIABLE, FIN,
+    AMPERSAND //Para el operador &
 };
 
 struct Token {

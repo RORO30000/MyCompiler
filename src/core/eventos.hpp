@@ -17,7 +17,9 @@ enum class TipoEvento {
     FUNCION_RETORNO,    // retornar valor;
     MOSTRAR_SALIDA,     // mostrar(...)
     CONDICION_SI,       // evalúa la condición del si
-    LEER_SOLICITUD,     // leer(variable) — solicita entrada al usuario
+    LEER_SOLICITUD,
+    PUNTERO_MODIFICADO, // Cuando cambia la dirección a la que apunta
+    PUNTERO_DESREFERENCIADO     // leer(variable) — solicita entrada al usuario
 };
 
 // ─── Un paso individual de la traza de ejecución

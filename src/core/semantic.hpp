@@ -12,6 +12,7 @@ struct Variable {
     std::string tipo;
     std::string valor;
     bool usada = false;
+    std::string direccion;  // Su propia dirección de memoria virtual, ej: "0x7ffd0008"
 };
 
 // ─── Arreglo ─────────────────────────────────────────────────────
@@ -49,6 +50,10 @@ private:
     std::vector<std::unordered_map<std::string, Variable>> ambitos;
     std::vector<std::unordered_map<std::string, Arreglo>>  ambitosArr;
 
+    std::unordered_map<std::string, Variable*> direccionAMemoria;
+    std::unordered_map<std::string, std::string> direccionANombre; 
+    uint32_t siguienteDireccion = 0x7ffd0000; // Dirección base de la simulación
+
 public:
     TablaVariables() {
         ambitos.push_back({});
@@ -60,20 +65,24 @@ public:
         ambitosArr.push_back({});
     }
 
-    void salirAmbito() {
-        if (ambitos.size() > 1) {
-            revisarNoUsadasEnAmbitoActual();
-            ambitos.pop_back();
-            ambitosArr.pop_back();
-        }
-    }
-
     // ── Variables simples ─────────────────────────────────────────
-    void declarar(const std::string& nombre, const std::string& tipo,
-                  const std::string& valor, int linea) {
-        if (ambitos.back().count(nombre))
-            throw std::runtime_error(error_variable_ya_existe(nombre, linea));
-        ambitos.back()[nombre] = {tipo, valor, false};
+    void declarar(const std::string& nombre, const std::string& tipo, const std::string& valor, int linea) {
+        if (ambitos.back().count(nombre)){
+            throw std::runtime_error(error_variable_ya_existe(nombre, linea));                    
+        }
+
+        std::stringstream ss;
+        ss << "0x" << std::hex << siguienteDireccion;
+        std::string addrStr = ss.str();
+        siguienteDireccion += 4; // Avanza 4 bytes simulados
+                
+        // Guardamos la variable con su dirección
+        ambitos.back()[nombre] = {tipo, valor, false, addrStr};
+                
+        // Registramos en el mapa físico virtual para el rastreador de la derecha
+        Variable* varRef = &ambitos.back()[nombre];
+        direccionAMemoria[addrStr] = varRef;
+        direccionANombre[addrStr] = nombre;
     }
 
     void asignar(const std::string& nombre, const std::string& valor, int linea) {
@@ -145,6 +154,38 @@ public:
             if (!var.usada) std::cout << advertencia_variable_no_usada(nombre);
         for (auto& [nombre, arr] : ambitosArr.front())
             if (!arr.usada) std::cout << advertencia_variable_no_usada(nombre);
+    }
+
+    std::string obtenerDireccion(const std::string& nombre, int linea) {
+        for (auto it = ambitos.rbegin(); it != ambitos.rend(); ++it) {
+            if (it->count(nombre)) return (*it)[nombre].direccion;
+        }
+        throw std::runtime_error("Error: Variable no declarada '" + nombre + "' en línea " + std::to_string(linea));
+    }
+
+    Variable* obtenerPorDireccion(const std::string& addr, int linea) {
+        if (direccionAMemoria.count(addr)) {
+            return direccionAMemoria[addr];
+        }
+        throw std::runtime_error("[ERROR DE MEMORIA] Dirección inválida o inaccesible: " + addr + " en línea " + std::to_string(linea));
+    }
+        
+    std::string obtenerNombrePorDireccion(const std::string& addr) {
+        if (direccionANombre.count(addr)) return direccionANombre[addr];
+        return "desconocido";
+    }
+
+    // 3. Modifica tu método salirAmbito() para limpiar el mapa cuando decolen variables:
+    void salirAmbito() {
+        if (ambitos.size() > 1) {
+            revisarNoUsadasEnAmbitoActual();
+            for (auto& [nombre, var] : ambitos.back()) {
+                direccionAMemoria.erase(var.direccion);
+                direccionANombre.erase(var.direccion);
+            }
+            ambitos.pop_back();
+            ambitosArr.pop_back();
+        }
     }
 };
 
