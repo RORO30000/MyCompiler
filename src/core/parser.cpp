@@ -686,6 +686,9 @@ void parseSi(bool ejecutar) {
     std::string cond = condBool ? "verdadero" : "falso";
     consumir(TipoToken::PAREN_DE);
 
+    // 'entonces' opcional en si (cond) entonces { ... }
+    if (esTipo(TipoToken::ENTONCES)) pos++;
+
     if (ejecutar)
         emitir({TipoEvento::CONDICION_SI, lineaSi, "", cond});
 
@@ -1291,7 +1294,7 @@ void parseSentencia(bool ejecutar) {
 
     if (esTipo(TipoToken::LEER))     { parseLeer(ejecutar);       return; }
     if (esTipo(TipoToken::SI)) {
-        // Lookahead: si (cond) entonces → ternario, si (cond) { → condicional
+        // Lookahead: si (cond) entonces expr → ternario, si (cond) { → condicional
         bool esTernario = false;
         if (pos + 1 < tkns->size() && (*tkns)[pos + 1].tipo == TipoToken::PAREN_IZ) {
             size_t tmp = pos + 2;
@@ -1302,8 +1305,11 @@ void parseSentencia(bool ejecutar) {
                 if (depth > 0) tmp++;
             }
             tmp++;
-            if (tmp < tkns->size() && (*tkns)[tmp].tipo == TipoToken::ENTONCES)
-                esTernario = true;
+            if (tmp < tkns->size() && (*tkns)[tmp].tipo == TipoToken::ENTONCES) {
+                // si después de 'entonces' viene '{' → es condicional, no ternario
+                if (tmp + 1 < tkns->size() && (*tkns)[tmp + 1].tipo != TipoToken::LLAVE_IZ)
+                    esTernario = true;
+            }
         }
         if (!esTernario) {
             parseSi(ejecutar);

@@ -3,6 +3,8 @@
 #include "core/lexer.hpp"
 #include "core/eventos.hpp"
 #include <vector>
+#include <set>
+#include <regex>
 #include <sstream>
 #include <iostream>
 #include <QFont>
@@ -33,6 +35,64 @@ double              parsear(std::vector<Token>&, std::vector<EventoPaso>* = null
 std::string         preprocesarBibliotecas(const std::string&);
 void                preprocesarBibliotecas(const std::string&, std::string&, std::vector<int>&);
 void                setInputHook(std::string (*hook)());
+
+// ─── Helpers para vista solo-funciones de biblioteca ─────────────
+static std::vector<std::string> _splitLines(const std::string& s) {
+    std::vector<std::string> lines;
+    std::string line;
+    for (char c : s) {
+        if (c == '\n') {
+            lines.push_back(line);
+            line.clear();
+        } else {
+            line += c;
+        }
+    }
+    if (!line.empty()) lines.push_back(line);
+    return lines;
+}
+
+struct _FuncInfo {
+    std::string nombre;
+    std::string cuerpo;
+    int lineaInicio = 0; // 1-indexed en expanded
+    int lineaFin    = 0;
+    bool usada = false;
+};
+
+// Extrae el cuerpo de una función desde su línea de definición hasta el '}' de cierre
+static std::string _extraerFuncion(const std::vector<std::string>& lines,
+                                    int defLine, int& endLine)
+{
+    // Buscar la línea que contiene '{'
+    int braceStart = -1;
+    for (int j = defLine - 1; j < (int)lines.size(); j++) {
+        if (lines[j].find('{') != std::string::npos) {
+            braceStart = j; break;
+        }
+    }
+    if (braceStart < 0) return "";
+
+    int braces = 0;
+    bool opened = false;
+    for (int j = braceStart; j < (int)lines.size(); j++) {
+        for (char c : lines[j]) {
+            if (c == '{') { braces++; opened = true; }
+            if (c == '}') { braces--; }
+        }
+        if (opened && braces == 0) {
+            endLine = j + 1; // 1-indexed
+            break;
+        }
+    }
+    if (endLine <= 0) return "";
+
+    std::string cuerpo;
+    for (int j = defLine - 1; j < endLine; j++) {
+        cuerpo += lines[j] + "\n";
+    }
+    return cuerpo;
+}
 
 // ═════════════════════════════════════════════════════════════════
 //  Helper: crear botón con estilo unificado
@@ -701,6 +761,100 @@ void VentanaPrincipal::reestilarTodo() {
 }
 
 // ═════════════════════════════════════════════════════════════════
+//  _construirVistaSoloFunciones — extrae solo las funciones de
+//  biblioteca que son invocadas en el código del usuario
+// ═════════════════════════════════════════════════════════════════
+void VentanaPrincipal::_construirVistaSoloFunciones(
+    const std::string& expanded,
+    const std::vector<int>& mapaLineas)
+{
+    _vistaSoloFunciones.clear();
+    _mapaLineasLibreria.assign(mapaLineas.size(), -1);
+
+    auto lines = _splitLines(expanded);
+    if (lines.empty()) return;
+
+    // 1. Encontrar todas las definiciones de función en código de biblioteca
+    std::regex fnDefRe(R"(^\s*(entero|decimal|cadena|booleano|caracter|vacio|funcion)\s+(\w+)\s*\()");
+    std::vector<_FuncInfo> funciones;
+    int numLines = (int)lines.size();
+
+    for (int i = 0; i < numLines; i++) {
+        int expLine = i + 1; // 1-indexed
+        if ((size_t)expLine >= mapaLineas.size()) break;
+        if (mapaLineas[expLine] != 0) continue; // solo líneas de librería
+
+        std::smatch m;
+        if (std::regex_search(lines[i], m, fnDefRe)) {
+            _FuncInfo fn;
+            fn.nombre = m[2].str();
+            fn.lineaInicio = expLine;
+            fn.cuerpo = _extraerFuncion(lines, expLine, fn.lineaFin);
+            if (!fn.cuerpo.empty())
+                funciones.push_back(fn);
+        }
+    }
+
+    if (funciones.empty()) return;
+
+    // 2. Construir un set de nombres de función para búsqueda rápida
+    std::set<std::string> nombresLib;
+    for (auto& fn : funciones)
+        nombresLib.insert(fn.nombre);
+
+    // 3. Marcar funciones llamadas desde código de usuario
+    std::regex callRe;
+    for (int i = 0; i < numLines; i++) {
+        int expLine = i + 1;
+        if ((size_t)expLine >= mapaLineas.size()) break;
+        if (mapaLineas[expLine] == 0) continue; // solo líneas de usuario
+
+        for (auto& fn : funciones) {
+            if (fn.usada) continue;
+            callRe = std::regex("\\b" + fn.nombre + "\\s*\\(");
+            if (std::regex_search(lines[i], callRe))
+                fn.usada = true;
+        }
+    }
+
+    // 4. Propagación transitiva: funciones de lib que llaman a otras funciones de lib
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (auto& fn : funciones) {
+            if (!fn.usada) continue;
+            for (auto& fn2 : funciones) {
+                if (fn2.usada) continue;
+                callRe = std::regex("\\b" + fn2.nombre + "\\s*\\(");
+                if (std::regex_search(fn.cuerpo, callRe)) {
+                    fn2.usada = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    // 5. Construir vista solo-funciones y mapa de líneas
+    for (auto& fn : funciones) {
+        if (!fn.usada) continue;
+
+        int soloLineStart = (int)std::count(
+            _vistaSoloFunciones.begin(), _vistaSoloFunciones.end(), '\n') + 1;
+
+        _vistaSoloFunciones += fn.cuerpo;
+        if (!_vistaSoloFunciones.empty() && _vistaSoloFunciones.back() != '\n')
+            _vistaSoloFunciones += '\n';
+
+        // Mapear cada línea expandida → línea en la vista solo-funciones
+        int soloLine = soloLineStart;
+        for (int el = fn.lineaInicio; el <= fn.lineaFin; el++) {
+            if ((size_t)el < _mapaLineasLibreria.size())
+                _mapaLineasLibreria[el] = soloLine++;
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════
 //  toggleTheme — alterna entre tema oscuro y claro
 // ═════════════════════════════════════════════════════════════════
 void VentanaPrincipal::toggleTheme() {
@@ -1116,7 +1270,12 @@ void VentanaPrincipal::manejarEjecucion() {
                 editorExpandido->show();
                 splitterEditores->setSizes({480, 480});
             }
-            editorExpandido->setPlainText(QString::fromStdString(expanded));
+            // Construir vista solo con las funciones de biblioteca invocadas
+            _construirVistaSoloFunciones(expanded, mapaLineas);
+            editorExpandido->setPlainText(
+                _vistaSoloFunciones.empty()
+                ? QString::fromStdString(expanded)
+                : QString::fromStdString(_vistaSoloFunciones));
         } else {
             if (editorExpandido->isVisible()) {
                 editorExpandido->hide();
@@ -1479,7 +1638,6 @@ static void _resaltarEditor(CodeEditor* ed, int linea, bool scroll = true) {
 // ═════════════════════════════════════════════════════════════════
 void VentanaPrincipal::resaltarLinea(int lineaExpandida) {
     if (lineaExpandida <= 0) {
-        // Limpiar ambos paneles
         _resaltarEditor(editorCodigo, -1);
         if (editorExpandido->isVisible())
             _resaltarEditor(editorExpandido, -1);
@@ -1489,19 +1647,32 @@ void VentanaPrincipal::resaltarLinea(int lineaExpandida) {
 
     _ultimaLineaExpandida = lineaExpandida;
 
-    // Panel izquierdo: convertir a línea original
-    int lineaOrig = ((size_t)lineaExpandida < mapaLineas.size())
-                    ? mapaLineas[lineaExpandida] : -1;
-    if (lineaOrig > 0) {
-        _resaltarEditor(editorCodigo, lineaOrig, true);
-    } else {
-        // Línea externa (librería) o inválida → ocultar flecha en original
-        _resaltarEditor(editorCodigo, -1);
-    }
+    bool esLibreria = ((size_t)lineaExpandida < mapaLineas.size())
+                      && mapaLineas[lineaExpandida] == 0;
 
-    // Panel derecho: siempre mostrar expandido si visible
-    if (editorExpandido->isVisible())
-        _resaltarEditor(editorExpandido, lineaExpandida, false);
+    if (esLibreria && !_vistaSoloFunciones.empty()) {
+        // Línea de biblioteca → flecha en panel derecho (vista solo-funciones)
+        _resaltarEditor(editorCodigo, -1);
+
+        int soloLinea = ((size_t)lineaExpandida < _mapaLineasLibreria.size())
+                        ? _mapaLineasLibreria[lineaExpandida] : -1;
+        if (editorExpandido->isVisible() && soloLinea > 0)
+            _resaltarEditor(editorExpandido, soloLinea, false);
+        else if (editorExpandido->isVisible())
+            _resaltarEditor(editorExpandido, -1);
+    } else {
+        // Línea de usuario → flecha en panel izquierdo (editor original)
+        int lineaOrig = ((size_t)lineaExpandida < mapaLineas.size())
+                        ? mapaLineas[lineaExpandida] : -1;
+        if (lineaOrig > 0)
+            _resaltarEditor(editorCodigo, lineaOrig, true);
+        else
+            _resaltarEditor(editorCodigo, -1);
+
+        // Panel derecho: sin flecha (solo muestra las funciones)
+        if (editorExpandido->isVisible())
+            _resaltarEditor(editorExpandido, -1);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════

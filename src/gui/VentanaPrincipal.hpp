@@ -148,6 +148,12 @@ private:
     // ── Helper: re-aplicar todos los estilos visuales ─────────────
     void reestilarTodo();
 
+    // ── Vista solo-funciones de bibliotecas ──────────────────────
+    void _construirVistaSoloFunciones(const std::string& expanded,
+                                      const std::vector<int>& mapaLineas);
+    std::vector<int> _mapaLineasLibreria; // expanded→solo view line (−1 = no aplica)
+    std::string _vistaSoloFunciones;
+
     // ── Archivo actual ────────────────────────────────────────────
     QString rutaActual;
 
