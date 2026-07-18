@@ -21,12 +21,12 @@ La comunicación entre capas ocurre via:
 ```
 MyCompiler/
 ├── src/
-│   ├── main.cpp                 # Entry point consola (test runner, 30 pruebas)
+│   ├── main.cpp                 # Entry point consola (test runner, 31 pruebas)
 │   ├── main_gui.cpp             # Entry point GUI Qt
 │   ├── core/
 │   │   ├── lexer.hpp            # Token types (TipoToken enum, ~60 tokens), Token struct
 │   │   ├── lexer.cpp            # Analizador léxico (tokenizar)
-│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~1276 líneas)
+│   │   ├── parser.cpp           # Parser recursivo descendente + intérprete (~1405 líneas)
 │   │   ├── semantic.hpp         # TablaVariables (scoped), TablaFunciones, Arreglo
 │   │   ├── errors.hpp           # Mensajes de error/warning/success en español
 │   │   ├── eventos.hpp          # TipoEvento enum, EventoPaso struct
@@ -34,7 +34,8 @@ MyCompiler/
 │   │   └── preprocesador.cpp    # #incluir "archivo" → resolución recursiva
 │   └── gui/
 │       ├── VentanaPrincipal.hpp # VentanaPrincipal, CodeEditor, LineNumberArea
-│       └── VentanaPrincipal.cpp # IDE gráfico completo (~1190 líneas)
+│       ├── VentanaPrincipal.cpp # IDE gráfico completo (~1245 líneas)
+│       └── syntax_highlighter.hpp # Coloreado sintáctico header-only sin Q_OBJECT
 ├── programas/                   # Carpeta de programas del usuario
 ├── Makefile                     # Build adaptativo (Qt6/Qt5 auto-detect)
 ├── matematica.txt               # Biblioteca de ejemplo para #incluir
@@ -193,14 +194,16 @@ main()
 
 | Archivo | Líneas | Rol |
 |---|---|---|
-| `src/core/parser.cpp` | 1311 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook, bugfix `parseSi` brace-skipping con `saltarBloqueLlaves` |
-| `src/gui/VentanaPrincipal.cpp` | 1238 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
+| `src/core/parser.cpp` | 1405 | Corazón del compilador: gramática, ejecución, tipado estricto, generación de eventos, `leer()` con inputHook, bugfix `parseSi` brace-skipping con `saltarBloqueLlaves` |
+| `src/gui/VentanaPrincipal.cpp` | 1245 | IDE completo: UI, terminal emergente, animación, snapshots, navegación |
 | `src/gui/syntax_highlighter.hpp` | 161 | Coloreado sintáctico header-only sin Q_OBJECT |
-| `src/core/semantic.hpp` | 169 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
-| `src/core/lexer.cpp` | 216 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords), escapes `\n`/`\t`/etc. |
-| `src/core/lexer.hpp` | 45 | Tipos de token (TipoToken enum, ~60 tokens) y estructura Token |
-| `src/core/errors.hpp` | 364 | Catálogo completo de mensajes de error/advertencia en español |
-| `src/core/eventos.hpp` | 43 | Contrato de eventos entre parser y GUI |
+| `src/gui/VentanaPrincipal.hpp` | 130 | VentanaPrincipal (QMainWindow), CodeEditor, LineNumberArea |
+| `src/core/semantic.hpp` | 210 | Tabla de símbolos con ámbitos anidados, arreglos, funciones |
+| `src/core/lexer.cpp` | 219 | Tokenización: palabras reservadas, operadores, comentarios, cadenas (~29 keywords), escapes `\n`/`\t`/etc. |
+| `src/core/lexer.hpp` | 52 | Tipos de token (TipoToken enum, ~60 tokens) y estructura Token |
+| `src/core/errors.hpp` | 376 | Catálogo completo de mensajes de error/advertencia en español |
+| `src/core/eventos.hpp` | 45 | Contrato de eventos entre parser y GUI |
+| `src/main_gui.cpp` | 14 | Entry point GUI Qt |
 | `src/core/preprocesador.cpp` | 42 | Resolución recursiva de `#incluir` |
 | `src/core/preprocesador.hpp` | 4 | Declaración de `preprocesarBibliotecas` |
 | `src/main.cpp` | 401 | Test runner con 31 pruebas + helpers |
@@ -220,7 +223,7 @@ Los `#include` usan rutas relativas a `src/` gracias a la bandera `-Isrc` del co
 | Concatenación de cadenas con `+`, `hacer-mientras` | 3aca8d1 |
 | Operador ternario `si ... entonces ... sino` | 3337956 |
 | `elegir`/`caso`/`defecto`, `parar` como break | 4c27a3f |
-| Tipado estricto (validar tipos en declaración/asignación/retorno/parámetros/arreglos) | Actual |
-| Fix `formatearNumero` para locale con coma decimal | Actual |
-| Syntax highlighting en el editor (keywords, strings, números, comentarios, directivas) | Actual |
-| Fix `parseSi` saltarBloqueLlaves: cuando `solicitudRetorno` estaba activo y se entraba a la rama `sino`, el `{...}` del cuerpo no se consumía y `consumir(FIN_SI)` encontraba `{` en vez de `fin_si` | Actual |
+| Tipado estricto (validar tipos en declaración/asignación/retorno/parámetros/arreglos) | 937df6b |
+| Fix `formatearNumero` para locale con coma decimal | 937df6b |
+| Syntax highlighting en el editor (keywords, strings, números, comentarios, directivas) | 97ec8a1 |
+| Fix `parseSi` saltarBloqueLlaves: cuando `solicitudRetorno` estaba activo y se entraba a la rama `sino`, el `{...}` del cuerpo no se consumía y `consumir(FIN_SI)` encontraba `{` en vez de `fin_si` | 97ec8a1 |
