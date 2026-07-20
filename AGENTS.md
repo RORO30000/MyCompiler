@@ -96,6 +96,7 @@ MyCompiler/
 | Asignación | `=`, `+=`, `-=`, `*=` |
 | Incremento/Decremento | `++`, `--` |
 | Ternario | `si (cond) entonces v sino f` |
+| Indirección / Referencia | `*`, `&` |
 
 ### Tipado estricto
 
