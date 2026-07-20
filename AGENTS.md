@@ -77,6 +77,7 @@ MyCompiler/
 | `cadena` | Texto entre comillas dobles | `cadena s = "Hola";` |
 | `booleano` | `verdadero` o `falso` | `booleano ok = verdadero;` |
 | `caracter` | Un carácter entre comillas simples | `caracter c = 'A';` |
+| `puntero` | Dirección de memoria (ej. `entero* p`) | `entero* p = &x;` |
 
 ### Keywords
 
