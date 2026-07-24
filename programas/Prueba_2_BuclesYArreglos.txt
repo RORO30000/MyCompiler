@@ -1,0 +1,31 @@
+// ─── Prueba 2: Arreglos, bucles mientras y para ─────────────────
+Principal() {
+    arreglo entero nums[5];
+    nums[0] = 2;
+    nums[1] = 4;
+    nums[2] = 6;
+    nums[3] = 8;
+    nums[4] = 10;
+
+    mostrar("Recorrido con mientras:\n");
+    entero i = 0;
+    mientras (i < 5) {
+        mostrar("nums[" + i + "] = " + nums[i] + "\n");
+        i++;
+    } fin_mientras
+
+    mostrar("\nRecorrido con para:\n");
+    para (entero j = 0; j < 5; j++) {
+        nums[j] = nums[j] * 2;
+        mostrar("nums[" + j + "] = " + nums[j] + "\n");
+    } fin_para
+
+    mostrar("\nSumando todos los valores:\n");
+    entero suma = 0;
+    entero k = 0;
+    mientras (k < 5) {
+        suma = suma + nums[k];
+        k++;
+    } fin_mientras
+    mostrar("Suma total: " + suma + "\n");
+}

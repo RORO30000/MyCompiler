@@ -1,0 +1,36 @@
+// Prueba 3: Funciones propias y de biblioteca
+// Se usa: funciones con retorno, factorial recursivo de
+// la biblioteca matematica_avanzada, split view
+#incluir "matematica_avanzada.txt"
+
+entero sumar(entero a, entero b) {
+    retornar a + b;
+}
+
+entero factorialIter(entero n) {
+    entero res = 1;
+    mientras (n > 1) {
+        res = res * n;
+        n--;
+    } fin_mientras
+    retornar res;
+}
+
+Principal() {
+    entero a = 7;
+    entero b = 3;
+
+    mostrar("a = " + a + ", b = " + b + "\n");
+    mostrar("Suma (funcion propia): " + sumar(a, b) + "\n");
+    mostrar("Factorial iterativo de " + a + ": " + factorialIter(a) + "\n");
+
+    // Funciones de biblioteca (panel derecho)
+    entero factLib = factorial(a);
+    mostrar("Factorial (biblioteca) de " + a + ": " + factLib + "\n");
+
+    entero absVal = absoluto(-15);
+    mostrar("Valor absoluto de -15: " + absVal + "\n");
+
+    entero maxVal = maximo(100, 50);
+    mostrar("Maximo entre 100 y 50: " + maxVal + "\n");
+}

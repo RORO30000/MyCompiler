@@ -1,0 +1,27 @@
+// ─── Prueba 4: elegir/caso, continuar y hacer-mientras ──────────
+Principal() {
+    mostrar("Numeros del 1 al 10 saltando multiplos de 3:\n");
+    para (entero i = 1; i <= 10; i++) {
+        si (i % 3 == 0) {
+            continuar;
+        } fin_si
+        mostrar(i + " ");
+    } fin_para
+    mostrar("\n\n");
+
+    elegir (4) {
+        caso 1: mostrar("Elegiste uno\n"); parar;
+        caso 2: mostrar("Elegiste dos\n"); parar;
+        caso 3: mostrar("Elegiste tres\n"); parar;
+        caso 4: mostrar("Elegiste cuatro\n"); parar;
+        defecto: mostrar("Otro numero\n");
+    }
+
+    mostrar("\nCuenta regresiva con hacer-mientras:\n");
+    entero k = 5;
+    hacer {
+        mostrar(k + " ");
+        k--;
+    } mientras (k >= 1) fin_mientras
+    mostrar("\n");
+}

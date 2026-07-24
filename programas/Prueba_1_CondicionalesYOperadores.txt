@@ -1,0 +1,35 @@
+// Prueba 1: Condicionales, operadores compuestos y tipos basicos
+Principal() {
+    entero a = 10;
+    entero b = 20;
+    entero c = 15;
+
+    mostrar("a = " + a + ", b = " + b + ", c = " + c + "\n");
+
+    // Mayor de tres con si / sino si
+    entero max = a;
+    si (b > max) {
+        max = b;
+    } sino si (c > max) {
+        max = c;
+    } fin_si
+    mostrar("El mayor es: " + max + "\n");
+
+    // Operadores logicos dentro de si
+    si (a > 0 && b > 0) {
+        mostrar("Ambos numeros son positivos\n");
+    } sino {
+        mostrar("Algun numero no es positivo\n");
+    } fin_si
+
+    // Operador de comparacion !=
+    si (a != b) {
+        mostrar("a y b son diferentes\n");
+    } fin_si
+
+    // Asignacion compuesta += y -=
+    a += 5;
+    b -= 5;
+    mostrar("a += 5  -> a = " + a + "\n");
+    mostrar("b -= 5  -> b = " + b + "\n");
+}

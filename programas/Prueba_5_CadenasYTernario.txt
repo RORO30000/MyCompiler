@@ -1,0 +1,41 @@
+// Prueba 5: Cadenas, ternario, booleanos y biblioteca texto
+// Se usa: concatenacion, ternario, booleano, operador no,
+// funciones de la biblioteca texto
+#incluir "texto.txt"
+
+Principal() {
+    // Concatenacion de cadenas
+    cadena saludo = "Hola";
+    cadena nombre = "MyCompiler";
+    cadena completo = saludo + ", " + nombre + "!";
+    mostrar(completo + "\n");
+
+    // Funcion de biblioteca: repetir
+    cadena repetida = repetir("AB", 3);
+    mostrar("AB repetido 3 veces: " + repetida + "\n");
+    cadena separador = repetir("=", 15);
+    mostrar(separador + "\n");
+
+    // Operador ternario
+    entero x = 8;
+    entero y = 12;
+    cadena resultado = si (x > y) entonces "x es mayor" sino "y es mayor o igual";
+    mostrar("x = " + x + ", y = " + y + " -> " + resultado + "\n");
+
+    // Booleanos y operador no
+    booleano cond = verdadero;
+    si (no cond) {
+        mostrar("ramA falsa - no se muestra\n");
+    } sino {
+        mostrar("no cond es falso, correcto\n");
+    } fin_si
+
+    // Incremento y decremento
+    entero contador = 0;
+    contador++;
+    contador++;
+    contador++;
+    mostrar("Contador +3: " + contador + "\n");
+    contador--;
+    mostrar("Contador -1: " + contador + "\n");
+}
